@@ -1,0 +1,212 @@
+# =============================================================================
+# Full-Stack Project .gitignore
+# FastAPI (Python) + Flutter + MongoDB + ML
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# Python / FastAPI
+# -----------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.virtualenv/
+
+# Environment variables / secrets
+.env
+.env.*
+!.env.example
+
+# Packaging / build artifacts
+*.egg-info/
+*.egg
+build/
+dist/
+pip-wheel-metadata/
+.eggs/
+
+# Testing / type-checking caches
+.pytest_cache/
+.mypy_cache/
+.pyre/
+.pytype/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+
+# -----------------------------------------------------------------------------
+# Machine Learning / Models / Datasets
+# -----------------------------------------------------------------------------
+*.pkl
+*.joblib
+*.h5
+*.hdf5
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.pb
+*.tflite
+*.safetensors
+
+# Model artifact directories (keep folder, ignore contents)
+**/ml_models/*
+!**/ml_models/.gitkeep
+
+# Datasets (keep folder, ignore contents)
+**/datasets/*
+!**/datasets/.gitkeep
+*.csv
+*.tsv
+*.parquet
+*.feather
+*.zip
+*.tar
+*.tar.gz
+*.7z
+
+# Local database dumps / exports
+*.bson
+*.dump
+*.sql
+*.sqlite
+*.sqlite3
+*.db
+
+
+# -----------------------------------------------------------------------------
+# Flutter / Dart
+# -----------------------------------------------------------------------------
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+pubspec.lock
+
+# Flutter generated
+**/generated_plugin_registrant.dart
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+
+# iOS
+ios/Pods/
+ios/Podfile.lock
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/App.framework
+ios/Flutter/flutter_assets/
+ios/Flutter/flutter_export_environment.sh
+ios/ServiceDefinitions.json
+ios/Runner/GeneratedPluginRegistrant.*
+
+# Android
+android/.gradle/
+android/app/build/
+android/captures/
+android/local.properties
+android/key.properties
+android/**/gradle-wrapper.jar
+android/.idea/
+*.keystore
+*.jks
+
+# macOS / Linux / Windows desktop builds
+macos/Pods/
+linux/flutter/ephemeral/
+windows/flutter/ephemeral/
+
+# Web
+web/.dart_tool/
+
+
+# -----------------------------------------------------------------------------
+# Node / JavaScript (tooling, docs, web bits)
+# -----------------------------------------------------------------------------
+node_modules/
+dist/
+coverage/
+.npm/
+.yarn/
+.pnp.*
+.next/
+.nuxt/
+.parcel-cache/
+*.tsbuildinfo
+
+
+# -----------------------------------------------------------------------------
+# IDE / Editor files
+# -----------------------------------------------------------------------------
+.vscode/
+.idea/
+*.iml
+*.ipr
+*.iws
+*.swp
+*.swo
+*~
+.history/
+.project
+.classpath
+.settings/
+
+
+# -----------------------------------------------------------------------------
+# System files
+# -----------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+
+# -----------------------------------------------------------------------------
+# Logs & temp files
+# -----------------------------------------------------------------------------
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.bak
+*.old
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pip-log.txt
+
+
+# -----------------------------------------------------------------------------
+# Project-specific (research / experiments)
+# -----------------------------------------------------------------------------
+checkpoints/
+runs/
+mlruns/
+wandb/
+notebooks/scratch/
