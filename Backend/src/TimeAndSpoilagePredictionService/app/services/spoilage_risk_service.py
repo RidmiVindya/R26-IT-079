@@ -43,7 +43,11 @@ class SpoilageRiskService:
 
     @property
     def model_name(self) -> str:
-        return "RandomForestClassifier" if self._model is not None else "RuleBasedFallback"
+        if self._model is None:
+            return "RuleBasedFallback"
+        if hasattr(self._model, "named_steps") and "model" in self._model.named_steps:
+            return type(self._model.named_steps["model"]).__name__
+        return type(self._model).__name__
 
     def predict(self, payload: SpoilageRiskRequest) -> Tuple[str, str, str]:
         smell_level = classify_smell_level(payload.mq136_value)
