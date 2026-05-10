@@ -24,7 +24,7 @@ Use the following format:
 
 | Type | Purpose |
 |------|---------|
-| `feat` | New feature |
+| `feature` | New feature |
 | `fix` | Bug fix |
 | `refactor` | Code improvement |
 | `docs` | Documentation updates |
@@ -46,9 +46,9 @@ Use the following format:
 #### Examples
 
 ```
-feat/backend/user-auth
-feat/mobile/batch-dashboard
-feat/predictive/spoilage-model
+feature/backend/user-auth
+feature/mobile/batch-dashboard
+feature/predictive/spoilage-model
 fix/vision/image-upload
 docs/readme/update
 ```
@@ -64,8 +64,8 @@ We follow the Conventional Commits format:
 #### Examples
 
 ```
-feat(backend): add batch API
-feat(mobile): implement dashboard UI
+feature(backend): add batch API
+feature(mobile): implement dashboard UI
 fix(iot): correct humidity sensor reading
 docs(readme): update installation guide
 ```
@@ -93,11 +93,11 @@ docs(readme): update installation guide
 ```bash
 git checkout dev
 git pull origin dev
-git checkout -b feat/mobile/dashboard-ui
+git checkout -b feature/mobile/dashboard-ui
 
 git add .
-git commit -m "feat(mobile): add dashboard UI"
-git push origin feat/mobile/dashboard-ui
+git commit -m "feature(mobile): add dashboard UI"
+git push origin feature/mobile/dashboard-ui
 ```
 
 Then create a Pull Request to merge into `dev`.
