@@ -16,6 +16,9 @@ logger = logging.getLogger(__name__)
 
 RISK_LABELS = ("Low", "Medium", "High")
 
+# Must match train_models/train_spoilage_risk_model.py
+SMELL_LEVEL_ENCODING = {"Low": 0, "Medium": 1, "High": 2}
+
 
 class SpoilageRiskService:
     def __init__(self) -> None:
@@ -47,7 +50,7 @@ class SpoilageRiskService:
 
         if self._model is not None:
             try:
-                features = self._build_features(payload)
+                features = self._build_features(payload, smell_level)
                 raw = self._model.predict(features)[0]
                 risk = self._normalize_label(raw)
                 return smell_level, risk, self.model_name
@@ -56,7 +59,8 @@ class SpoilageRiskService:
 
         return smell_level, self._rule_based_predict(payload, smell_level), "RuleBasedFallback"
 
-    def _build_features(self, p: SpoilageRiskRequest) -> np.ndarray:
+    def _build_features(self, p: SpoilageRiskRequest, smell_level: str) -> np.ndarray:
+        smell_code = SMELL_LEVEL_ENCODING.get(smell_level, 0)
         return np.array(
             [
                 [
@@ -64,7 +68,7 @@ class SpoilageRiskService:
                     p.humidity_percent,
                     p.elapsed_drying_time_hours,
                     p.weight_loss_percentage,
-                    p.mq136_value,
+                    smell_code,
                 ]
             ],
             dtype=float,
