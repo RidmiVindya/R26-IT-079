@@ -6,6 +6,113 @@ An integrated AI–IoT research platform designed to modernize and digitize Sri 
 
 The platform combines machine learning, computer vision, IoT sensing, and real-time monitoring technologies to support small and medium-scale dry fish processors in improving product quality, reducing post-harvest losses, strengthening sustainability practices, and enabling data-driven decision-making throughout the drying workflow.
 
+## 🌿 Git Conventions
+
+To maintain a clean and organized codebase, all team members must follow the Git workflow below.
+
+---
+
+### Branch Naming
+
+Use the following format:
+
+```bash
+<type>/<module>/<short-description>
+```
+
+#### Types
+
+| Type | Purpose |
+|------|---------|
+| `feature` | New feature |
+| `fix` | Bug fix |
+| `refactor` | Code improvement |
+| `docs` | Documentation updates |
+| `chore` | Configuration/setup changes |
+
+#### Modules
+
+| Module | Description |
+|--------|-------------|
+| `backend` | Node.js backend |
+| `mobile` | Flutter mobile app |
+| `predictive` | ML prediction module |
+| `vision` | Computer vision module |
+| `traceability` | Sustainability & traceability |
+| `iot` | Raspberry Pi & sensor integration |
+| `dashboard` | Verification dashboard |
+| `docs` | Documentation |
+
+#### Examples
+
+```
+feature/backend/user-auth
+feature/mobile/batch-dashboard
+feature/predictive/spoilage-model
+fix/vision/image-upload
+docs/readme/update
+```
+
+### Commit Messages
+
+We follow the Conventional Commits format:
+
+```
+<type>(<scope>): <description>
+```
+
+#### Examples
+
+```
+feature(backend): add batch API
+feature(mobile): implement dashboard UI
+fix(iot): correct humidity sensor reading
+docs(readme): update installation guide
+```
+
+### Workflow
+
+1. Create a branch from `dev`
+2. Follow the naming convention
+3. Commit with meaningful messages
+4. Push your branch
+5. Open a Pull Request to `dev`
+6. Get at least one team review before merging
+7. Only the project lead can merge `dev` into `main`
+
+### Branch Strategy
+
+- **`main`** → Protected production/stable branch
+- **`dev`** → Main development branch for the team
+- **Feature branches** → Created from `dev`
+
+> Team members do not have direct access to the `main` branch to ensure project stability and protect the production codebase.
+
+### Quick Workflow Example
+
+```bash
+git checkout dev
+git pull origin dev
+git checkout -b feature/mobile/dashboard-ui
+
+git add .
+git commit -m "feature(mobile): add dashboard UI"
+git push origin feature/mobile/dashboard-ui
+```
+
+Then create a Pull Request to merge into `dev`.
+
+### Important Rules
+
+- Do not commit directly to `main`
+- Always create feature branches from `dev`
+- Pull latest changes from `dev` before starting work
+- Keep commits clean and meaningful
+- Use `.gitignore` properly
+- Do not push `.env` or sensitive files
+
+---
+
 ## Project Overview
 
 Traditional dry fish processing in Sri Lanka still depends heavily on manual inspection, environmental guesswork, and experience-based decision-making. This often leads to:
