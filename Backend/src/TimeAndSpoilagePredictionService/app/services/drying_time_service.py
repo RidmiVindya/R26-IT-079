@@ -62,7 +62,11 @@ class DryingTimeService:
 
     @property
     def model_name(self) -> str:
-        return "RandomForestRegressor" if self._model is not None else "RuleBasedFallback"
+        if self._model is None:
+            return "RuleBasedFallback"
+        if hasattr(self._model, "named_steps") and "model" in self._model.named_steps:
+            return type(self._model.named_steps["model"]).__name__
+        return type(self._model).__name__
 
     def predict(self, payload: DryingTimeRequest) -> Tuple[float, str]:
         features = self._build_features(payload)
