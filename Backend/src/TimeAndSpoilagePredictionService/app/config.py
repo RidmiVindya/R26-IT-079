@@ -13,9 +13,11 @@ class Settings(BaseSettings):
     MONGO_COLLECTION_PREDICTIONS: str = "prediction_records"
 
     DRYING_TIME_MODEL_PATH: str = "app/ml_models/drying_time_model.pkl"
+    INITIAL_DRYING_TIME_MODEL_PATH: str = "app/ml_models/initial_drying_time_model.pkl"
     SPOILAGE_RISK_MODEL_PATH: str = "app/ml_models/spoilage_risk_model.pkl"
 
     ALLOWED_FISH_TYPES: tuple = (
+        # Generic English names
         "sardine",
         "anchovy",
         "mackerel",
@@ -24,6 +26,12 @@ class Settings(BaseSettings):
         "salmon",
         "cod",
         "tilapia",
+        # Sri Lankan dataset names
+        "balaya",
+        "hurulla",
+        "kumbalawa",
+        "salaya",
+        "sprats",
     )
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
