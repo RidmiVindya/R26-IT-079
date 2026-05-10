@@ -1,42 +1,29 @@
 import sys
 import json
 import pandas as pd
-from sklearn.linear_model import LinearRegression
+import joblib
+import os
 
-# Read command-line arguments
-fish_type = sys.argv[1]
-raw_weight = float(sys.argv[2])
+# Get current ml folder path
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Load dataset
-df = pd.read_csv("ml/dataset.csv")
+# Load trained model
+model_path = os.path.join(BASE_DIR, "waste_model.pkl")
+model = joblib.load(model_path)
 
-# One-hot encode fish_type
-df_encoded = pd.get_dummies(df, columns=["fish_type"])
+# Read arguments from Node.js
+Fish_type = sys.argv[1]
+Raw_weight = float(sys.argv[2])
 
-# Prepare training data
-X = df_encoded.drop("waste_amount", axis=1)
-y = df_encoded["waste_amount"]
+# Match training column names exactly
+input_data = pd.DataFrame({
+    "Fish Type": [Fish_type.capitalize()],
+    "Raw weight": [Raw_weight]
+})
 
-# Train model
-model = LinearRegression()
-model.fit(X, y)
+# Predict waste
+predicted_waste = model.predict(input_data)[0]
 
-# Create input row
-input_data = {"raw_weight": raw_weight}
-
-for col in X.columns:
-    if col != "raw_weight":
-        input_data[col] = 1 if col == f"fish_type_{fish_type}" else 0
-
-input_df = pd.DataFrame([input_data])
-
-# Ensure same column order
-input_df = input_df[X.columns]
-
-# Predict
-predicted_waste = model.predict(input_df)[0]
-
-# Return JSON
 print(json.dumps({
     "predictedWaste": round(float(predicted_waste), 2)
 }))
