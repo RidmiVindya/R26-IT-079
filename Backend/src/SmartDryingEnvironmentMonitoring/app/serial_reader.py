@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-SERIAL_PORT = os.getenv("SERIAL_PORT", "COM6")
+SERIAL_PORT = os.getenv("SERIAL_PORT", "COM3")
 BAUD_RATE = int(os.getenv("BAUD_RATE", 9600))
 
 arduino = None
