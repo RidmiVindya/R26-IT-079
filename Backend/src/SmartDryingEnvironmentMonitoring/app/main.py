@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from app.serial_reader import connect_arduino, read_sensor_block
 from app.background_service import auto_save_sensor_data
+from fastapi.middleware.cors import CORSMiddleware
 from app.routes import router
 
 import asyncio
@@ -40,3 +41,10 @@ def get_raw_sensor_data():
     return {
         "raw_data": block
     }
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)    
