@@ -17,21 +17,18 @@ class Settings(BaseSettings):
     SPOILAGE_RISK_MODEL_PATH: str = "app/ml_models/spoilage_risk_model.pkl"
 
     ALLOWED_FISH_TYPES: tuple = (
-        # Generic English names
-        "sardine",
-        "anchovy",
-        "mackerel",
-        "tuna",
-        "herring",
-        "salmon",
-        "cod",
-        "tilapia",
-        # Sri Lankan dataset names
-        "balaya",
+        "sprats",
+        "salaya",
         "hurulla",
         "kumbalawa",
-        "salaya",
-        "sprats",
+        "kelawalla",
+        "balaya",
+        "mora",
+        "linna",
+        "paraw",
+        "thalapath",
+        "tuna",
+        "mackerel",
     )
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
