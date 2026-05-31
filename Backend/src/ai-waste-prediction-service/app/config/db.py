@@ -1,14 +1,25 @@
-import os
 from pymongo import MongoClient
 from dotenv import load_dotenv
+import os
+import sys
 
 load_dotenv()
 
 MONGO_URI = os.getenv("MONGO_URI")
 
-client = MongoClient(MONGO_URI)
+try:
+    client = MongoClient(MONGO_URI)
 
-db = client["dry_fish_db"]
+    # Test connection
+    client.admin.command("ping")
 
-batches_collection = db["batches"]
-notifications_collection = db["notifications"]
+    print("MongoDB connected")
+
+    db = client["dryfishdb"]
+
+    batches_collection = db["batches"]
+    notifications_collection = db["notifications"]
+
+except Exception as error:
+    print(f"Database connection error: {error}")
+    sys.exit(1)

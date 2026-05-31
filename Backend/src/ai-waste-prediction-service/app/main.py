@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes.batch_routes import router as batch_router
 from app.routes.notification_routes import router as notification_router
+from app.routes.company_routes import router as company_router
 
 app = FastAPI()
 
@@ -16,6 +17,7 @@ app.add_middleware(
 
 app.include_router(batch_router, prefix="/api/batches")
 app.include_router(notification_router, prefix="/api/notifications")
+app.include_router(company_router, prefix="/api/companies")
 
 @app.get("/")
 async def home():
