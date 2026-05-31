@@ -21,19 +21,18 @@ logger = logging.getLogger(__name__)
 # Encoded fish types - kept stable for fallback math AND must match training script
 # (train_models/train_drying_time_model.py).
 FISH_TYPE_ENCODING = {
-    "sardine": 0,
-    "anchovy": 1,
-    "mackerel": 2,
-    "tuna": 3,
-    "herring": 4,
-    "salmon": 5,
-    "cod": 6,
-    "tilapia": 7,
-    "balaya": 8,
-    "hurulla": 9,
-    "kumbalawa": 10,
-    "salaya": 11,
-    "sprats": 12,
+    "sprats": 0,
+    "salaya": 1,
+    "hurulla": 2,
+    "kumbalawa": 3,
+    "kelawalla": 4,
+    "balaya": 5,
+    "mora": 6,
+    "linna": 7,
+    "paraw": 8,
+    "thalapath": 9,
+    "tuna": 10,
+    "mackerel": 11,
 }
 
 TARGET_WEIGHT_LOSS_PERCENT = 65.0  # Considered "fully dried"

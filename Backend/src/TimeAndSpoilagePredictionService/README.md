@@ -129,7 +129,7 @@ Base prefix: `/api/predict`
 
 ```json
 {
-  "fish_type": "sardine",
+  "fish_type": "salaya",
   "initial_weight_kg": 10.0,
   "current_weight_kg": 7.5,
   "temperature_c": 35.0,

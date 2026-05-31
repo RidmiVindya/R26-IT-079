@@ -1,0 +1,158 @@
+{
+  "info": {
+    "name": "Time & Spoilage Prediction Service",
+    "description": "FastAPI microservice for fish-drying time prediction, spoilage-risk classification, and smart drying recommendations.\n\nBase URL is parameterised via the `baseUrl` collection variable (default: `http://localhost:8001`).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "r26-it-079-time-spoilage-service"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8001",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET / (Root health check)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": ["{{baseUrl}}"],
+              "path": [""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /health (Liveness probe)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Predictions",
+      "item": [
+        {
+          "name": "POST /api/predict/drying-time",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fish_type\": \"salaya\",\n  \"initial_weight_kg\": 8.0,\n  \"current_weight_kg\": 5.6,\n  \"temperature_c\": 33.0,\n  \"humidity_percent\": 60.0,\n  \"elapsed_drying_time_hours\": 5.0,\n  \"weight_loss_rate\": 0.48\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/predict/drying-time",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "predict", "drying-time"]
+            },
+            "description": "Predict remaining drying hours for the current batch. `fish_type` must be one of: sprats, salaya, hurulla, kumbalawa, kelawalla, balaya, mora, linna, paraw, thalapath, tuna, mackerel."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/predict/drying-time (400 invalid)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fish_type\": \"salaya\",\n  \"initial_weight_kg\": 5.0,\n  \"current_weight_kg\": 7.5,\n  \"temperature_c\": 35.0,\n  \"humidity_percent\": 55.0,\n  \"elapsed_drying_time_hours\": 6.0,\n  \"weight_loss_rate\": 0.42\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/predict/drying-time",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "predict", "drying-time"]
+            },
+            "description": "Expects 400: current_weight_kg > initial_weight_kg should be rejected."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/predict/spoilage-risk",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"temperature_c\": 32.5,\n  \"humidity_percent\": 65.0,\n  \"elapsed_drying_time_hours\": 8.0,\n  \"weight_loss_percentage\": 28.5,\n  \"mq136_value\": 410\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/predict/spoilage-risk",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "predict", "spoilage-risk"]
+            },
+            "description": "Classifies spoilage risk (Low/Medium/High) and derives smell level from the raw MQ-136 reading."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/predict/spoilage-risk (high risk)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"temperature_c\": 28.0,\n  \"humidity_percent\": 85.0,\n  \"elapsed_drying_time_hours\": 40.0,\n  \"weight_loss_percentage\": 20.0,\n  \"mq136_value\": 850\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/predict/spoilage-risk",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "predict", "spoilage-risk"]
+            },
+            "description": "Slow drying + high humidity + strong smell signal — should classify as High risk."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/predict/recommendation",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"temperature_c\": 31.0,\n  \"humidity_percent\": 72.0,\n  \"elapsed_drying_time_hours\": 10.0,\n  \"weight_loss_percentage\": 35.0,\n  \"weight_loss_rate\": 0.38,\n  \"mq136_value\": 250,\n  \"spoilage_risk\": \"Low\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/predict/recommendation",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "predict", "recommendation"]
+            },
+            "description": "Returns drying status + actionable smart recommendation. `spoilage_risk` is required (typically the output of the spoilage-risk endpoint)."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

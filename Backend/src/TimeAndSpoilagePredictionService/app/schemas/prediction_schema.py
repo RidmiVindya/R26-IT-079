@@ -15,7 +15,7 @@ SpoilageRiskLiteral = Literal["Low", "Medium", "High"]
 # Drying time prediction
 # ---------------------------------------------------------------------------
 class DryingTimeRequest(BaseModel):
-    fish_type: str = Field(..., description="Type of fish, e.g. sardine, mackerel")
+    fish_type: str = Field(..., description="Type of fish, e.g. salaya, sprats, mackerel")
     initial_weight_kg: float = Field(..., gt=0, le=500, description="Initial batch weight in kg")
     current_weight_kg: float = Field(..., ge=0, le=500, description="Current batch weight in kg")
     temperature_c: float = Field(..., ge=-10, le=120, description="Drying chamber temperature in Celsius")
@@ -38,7 +38,7 @@ class DryingTimeRequest(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "fish_type": "sardine",
+                "fish_type": "salaya",
                 "initial_weight_kg": 10.0,
                 "current_weight_kg": 7.5,
                 "temperature_c": 35.0,

@@ -146,7 +146,11 @@ The proposed system is designed specifically for Sri Lankan coastal processing e
 
 ## High-Level System Architecture
 
-The platform operates as a modular AI–IoT architecture consisting of four interconnected research modules:
+The platform operates as a hybrid **edge – mobile – cloud** architecture.
+
+![System Architecture](docs/system_architecture.png)
+
+The platform is organized as a modular AI–IoT system consisting of four interconnected research modules:
 
 1. IoT Monitoring Module
 2. Predictive Analytics Module
@@ -391,92 +395,25 @@ This project is developed as part of an undergraduate research initiative under 
 
 The research focuses on applying Artificial Intelligence, Internet of Things (IoT), Machine Learning, and Computer Vision technologies to improve sustainability, quality assurance, and operational efficiency in Sri Lanka’s traditional dry fish processing industry.
 
-## Current Implementation Status
+## Installation & Deployment (High Level)
 
-The repository currently includes the backend microservice for predictive drying and spoilage analytics at:
+1. **IoT Units**
 
-- [Backend/src/TimeAndSpoilagePredictionService](Backend/src/TimeAndSpoilagePredictionService)
+   - Flash ESP32 firmware for environmental and weight sensing
+   - Calibrate DHT22 and HX711 load cells before deployment
 
-Current backend capabilities:
+2. **Backend Services**
 
-- Drying completion time prediction
-- Spoilage risk prediction
-- Smart recommendation generation
-- MongoDB record persistence
-- Rule-based fallback when trained models are unavailable
+   - Set up Python and Node.js environments
+   - Run FastAPI and Express.js microservices
+   - Connect to MongoDB for data persistence
 
-## Getting Started for the Backend Service
+3. **Mobile Application**
 
-### Prerequisites
+   - Install Flutter app on Android device
+   - Connect to backend services via REST APIs
 
-- Python 3.10 or higher
-- Git
-- MongoDB is optional for local persistence
+4. **Data Handling**
 
-### 1. Navigate to the service directory
-
-```powershell
-cd Backend\src\TimeAndSpoilagePredictionService
-```
-
-### 2. Create a virtual environment
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-```
-
-### 3. Install dependencies
-
-```powershell
-pip install -r requirements.txt
-```
-
-### 4. Configure environment variables
-
-Create a `.env` file in `Backend/src/TimeAndSpoilagePredictionService`:
-
-```env
-APP_PORT=8001
-MONGO_URI=mongodb://localhost:27017
-MONGO_DB_NAME=fish_drying_db
-```
-
-### 5. Train models (optional)
-
-```powershell
-python -m train_models.train_drying_time_model
-python -m train_models.train_spoilage_risk_model
-```
-
-### 6. Run the service
-
-```powershell
-uvicorn app.main:app --reload --port 8001
-```
-
-or
-
-```powershell
-python -m app.main
-```
-
-### 7. Open API documentation
-
-- Swagger UI: http://localhost:8001/docs
-- ReDoc: http://localhost:8001/redoc
-- Health check: http://localhost:8001/health
-
-## API Endpoints
-
-Base route prefix: `/api/predict`
-
-- `POST /api/predict/drying-time`
-- `POST /api/predict/spoilage-risk`
-- `POST /api/predict/recommendation`
-
-## Notes
-
-- The backend service is designed to work even when trained model files are missing.
-- The current `Frontend/` directory is empty and can be implemented in later phases.
-- This README reflects the current research platform scope and the existing backend implementation.
+   - Sensor logs streamed from ESP32 to backend
+   - Predictions, grading results, and traceability records stored in MongoDB
