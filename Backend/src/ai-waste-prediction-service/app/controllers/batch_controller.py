@@ -10,6 +10,24 @@ def serialize_doc(doc):
     return doc
 
 
+def calculate_recommended_duration(cleaned_weight: float):
+    """
+    Simple salting duration logic.
+    You can change these values later based on your project requirement.
+    """
+
+    cleaned_weight = float(cleaned_weight)
+
+    if cleaned_weight <= 5:
+        return 8
+    elif cleaned_weight <= 10:
+        return 12
+    elif cleaned_weight <= 20:
+        return 18
+    else:
+        return 24
+
+
 async def create_batch(data: dict):
     fish_type = data.get("fishType")
     raw_weight = data.get("rawWeight")
@@ -22,19 +40,25 @@ async def create_batch(data: dict):
     batch = {
         "batchId": batch_id,
         "fishType": fish_type,
-        "rawWeight": raw_weight,
+        "rawWeight": float(raw_weight),
         "date": data.get("date"),
         "location": data.get("location", ""),
+
         "predictedWaste": 0,
         "cleanedWeight": 0,
+
         "saltAmount": 0,
+        "recommendedDuration": 0,
         "saltingDurationHours": 0,
+
         "saltingStartTime": None,
         "saltingStatus": "not_started",
+
         "initialSaltedWeight": 0,
         "currentWeight": 0,
         "weightLoss": 0,
         "weightLossPercentage": 0,
+
         "createdAt": datetime.now(),
         "updatedAt": datetime.now(),
     }
@@ -81,6 +105,7 @@ async def update_batch(batch_id: str, data: dict):
         "rawWeight",
         "cleanedWeight",
         "saltAmount",
+        "recommendedDuration",
         "saltingDurationHours",
         "saltingStatus",
         "date",
@@ -181,7 +206,13 @@ async def predict_salt(batch_id: str, data: dict):
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
 
-    salt_amount = float(cleaned_weight) * 0.25
+    cleaned_weight = float(cleaned_weight)
+
+    if cleaned_weight <= 0:
+        raise HTTPException(status_code=400, detail="cleanedWeight must be greater than 0")
+
+    salt_amount = cleaned_weight * 0.25
+    recommended_duration = calculate_recommended_duration(cleaned_weight)
 
     batches_collection.update_one(
         {"batchId": batch_id},
@@ -189,53 +220,21 @@ async def predict_salt(batch_id: str, data: dict):
             "$set": {
                 "cleanedWeight": cleaned_weight,
                 "saltAmount": salt_amount,
+                "recommendedDuration": recommended_duration,
+                "saltingDurationHours": recommended_duration,
                 "updatedAt": datetime.now(),
             }
         }
     )
+
+    updated_batch = batches_collection.find_one({"batchId": batch_id})
 
     return {
         "message": "Salt predicted successfully",
-        "batchId": batch_id,
-        "fishType": batch["fishType"],
-        "cleanedWeight": cleaned_weight,
-        "saltAmount": salt_amount,
-    }
-
-
-async def start_salting(batch_id: str, data: dict):
-    initial_salted_weight = data.get("initialSaltedWeight")
-
-    if initial_salted_weight is None:
-        raise HTTPException(status_code=400, detail="initialSaltedWeight is required")
-
-    batch = batches_collection.find_one({"batchId": batch_id})
-
-    if not batch:
-        raise HTTPException(status_code=404, detail="Batch not found")
-
-    salting_start_time = datetime.now()
-
-    batches_collection.update_one(
-        {"batchId": batch_id},
-        {
-            "$set": {
-                "initialSaltedWeight": initial_salted_weight,
-                "currentWeight": initial_salted_weight,
-                "saltingStartTime": salting_start_time,
-                "saltingStatus": "in_progress",
+         "cleanedWeight": cleaned_weight,
+                "saltAmount": salt_amount,
+                "saltingDurationHours": recommended_duration,
                 "updatedAt": datetime.now(),
-            }
-        }
-    )
-
-    return {
-        "message": "Salting started successfully",
-        "batchId": batch_id,
-        "initialSaltedWeight": initial_salted_weight,
-        "currentWeight": initial_salted_weight,
-        "saltingStartTime": salting_start_time,
-        "saltingStatus": "in_progress",
     }
 
 

@@ -26,6 +26,16 @@ input_df = input_df[X.columns]
 
 predicted_salt = model.predict(input_df)[0]
 
+if cleaned_weight <= 10:
+    recommended_duration = 8
+elif cleaned_weight <= 30:
+    recommended_duration = 12
+elif cleaned_weight <= 50:
+    recommended_duration = 16
+else:
+    recommended_duration = 24
+
 print(json.dumps({
-    "saltAmount": round(float(predicted_salt), 2)
+    "saltAmount": round(float(predicted_salt), 2),
+    "recommendedDuration": recommended_duration
 }))
