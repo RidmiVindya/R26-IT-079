@@ -31,10 +31,13 @@ async def predict_waste(batch_id: str):
 async def predict_salt(batch_id: str):
     return await batch_controller.predict_salt(batch_id)
 
-
 @router.post("/{batch_id}/start-salting")
 async def start_salting(batch_id: str):
     return await batch_controller.start_salting(batch_id)
+
+@router.get("/{batch_id}/monitoring")
+async def get_monitoring(batch_id: str):
+    return await batch_controller.get_monitoring(batch_id)
 
 @router.post("/{batch_id}/send-waste-notification")
 async def send_waste_notification(batch_id: str):
