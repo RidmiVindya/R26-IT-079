@@ -258,126 +258,10 @@ async def send_waste_notification(batch_id: str):
     notifications_collection.insert_one(notification)
 
     return {
+        
         "message": "Waste notification generated successfully",
         "notification": serialize_doc(notification),  
     }
-
-async def start_salting(batch_id: str):
-
-    batch = batches_collection.find_one({"batchId": batch_id})
-
-    if not batch:
-        raise HTTPException(
-            status_code=404,
-            detail="Batch not found"
-        )
-
-    start_time = datetime.now()
-
-    batches_collection.update_one(
-        {"batchId": batch_id},
-        {
-            "$set": {
-                "saltingStartTime": start_time,
-                "saltingStatus": "In Progress",
-                "initialSaltedWeight": batch["cleanedWeight"],
-                "currentWeight": batch["cleanedWeight"],
-                "updatedAt": datetime.now(),
-            }
-        }
-    )
-
-    updated_batch = batches_collection.find_one({"batchId": batch_id})
-
-    return {
-        "message": "Salting started successfully",
-        "batch": {
-            "batchId": updated_batch["batchId"],
-            "fishType": updated_batch["fishType"],
-            "saltingStartTime": updated_batch["saltingStartTime"],
-            "saltingStatus": updated_batch["saltingStatus"],
-            "initialSaltedWeight": updated_batch["initialSaltedWeight"],
-            "currentWeight": updated_batch["currentWeight"],
-        }
-    
-
-    }
-
-    async def salting_monitor(batch_id: str):
-        
-        batch = batches_collection.find_one({"batchId": batch_id})
-
-    if not batch:
-        raise HTTPException(
-            status_code=404,
-            detail="Batch not found"
-        )
-
-    start_time = batch.get("saltingStartTime")
-
-    if start_time is None:
-        raise HTTPException(
-            status_code=400,
-            detail="Salting has not started."
-        )
-
-    duration = batch.get("recommendedDuration", 12)
-
-    elapsed_hours = (
-        datetime.now() - start_time
-    ).total_seconds() / 3600
-
-    progress = min(
-        (elapsed_hours / duration) * 100,
-        100,
-    )
-
-    initial = batch.get("initialSaltedWeight", 0)
-
-    current = batch.get("currentWeight", initial)
-
-    weight_loss = initial - current
-
-    weight_loss_percentage = (
-        (weight_loss / initial) * 100
-        if initial > 0
-        else 0
-    )
-
-    remaining = max(
-        duration - elapsed_hours,
-        0,
-    )
-
-    status = (
-        "Completed"
-        if progress >= 100
-        else "In Progress"
-    )
-
-    # Update status if completed
-    batches_collection.update_one(
-        {"batchId": batch_id},
-        {
-            "$set": {
-                "saltingStatus": status,
-                "updatedAt": datetime.now(),
-            }
-        }
-    )
-
-    return {
-        "batchId": batch["batchId"],
-        "fishType": batch["fishType"],
-        "status": status,
-        "startTime": start_time.isoformat(),
-        "progress": round(progress, 1),
-        "currentWeight": round(current, 2),
-        "weightLoss": round(weight_loss, 2),
-        "weightLossPercentage": round(weight_loss_percentage, 1),
-        "remainingHours": round(remaining, 2),
-    }
-    
 
 async def start_salting(batch_id: str):
 
@@ -409,3 +293,83 @@ async def start_salting(batch_id: str):
         "batch": serialize_doc(updated_batch),
     }
     
+async def salting_monitor(batch_id: str):
+
+    batch = batches_collection.find_one({"batchId": batch_id})
+
+    if not batch:
+        raise HTTPException(
+            status_code=404,
+            detail="Batch not found"
+        )
+
+    start_time = batch.get("saltingStartTime")
+
+    if start_time is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Salting has not started."
+        )
+
+    duration = batch.get("recommendedDuration", 12)
+
+    elapsed_hours = (
+        datetime.now() - start_time
+    ).total_seconds() / 3600
+
+    progress = min(
+        (elapsed_hours / duration) * 100,
+        100,
+    )
+
+    initial = batch.get("initialSaltedWeight", 0)
+
+    # Demo weight loss (replace later with IoT value)
+    current = max(
+        initial - (elapsed_hours * 0.15),
+        0,
+    )
+
+    weight_loss = initial - current
+
+    weight_loss_percentage = (
+        (weight_loss / initial) * 100
+        if initial > 0
+        else 0
+    )
+
+    remaining = max(
+        duration - elapsed_hours,
+        0,
+    )
+
+    status = (
+        "Completed"
+        if progress >= 100
+        else "In Progress"
+    )
+
+    batches_collection.update_one(
+        {"batchId": batch_id},
+        {
+            "$set": {
+                "currentWeight": current,
+                "weightLoss": weight_loss,
+                "weightLossPercentage": weight_loss_percentage,
+                "saltingStatus": status,
+                "updatedAt": datetime.now(),
+            }
+        }
+    )
+
+    return {
+        "batchId": batch["batchId"],
+        "fishType": batch["fishType"],
+        "status": status,
+        "startTime": start_time.isoformat(),
+        "progress": round(progress, 1),
+        "currentWeight": round(current, 2),
+        "weightLoss": round(weight_loss, 2),
+        "weightLossPercentage": round(weight_loss_percentage, 1),
+        "remainingHours": round(remaining, 2),
+    }
