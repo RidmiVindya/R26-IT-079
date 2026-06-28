@@ -28,13 +28,17 @@ async def predict_waste(batch_id: str):
     return await batch_controller.predict_waste(batch_id)
 
 @router.post("/{batch_id}/predict-salt")
-async def predict_salt(batch_id: str, data: dict = Body(...)):
-    return await batch_controller.predict_salt(batch_id, data)
+async def predict_salt(batch_id: str):
+    return await batch_controller.predict_salt(batch_id)
+
 
 @router.post("/{batch_id}/start-salting")
-async def start_salting(batch_id: str, data: dict = Body(...)):
-    return await batch_controller.start_salting(batch_id, data)
+async def start_salting(batch_id: str):
+    return await batch_controller.start_salting(batch_id)
 
 @router.post("/{batch_id}/send-waste-notification")
 async def send_waste_notification(batch_id: str):
     return await batch_controller.send_waste_notification(batch_id)
+
+
+    

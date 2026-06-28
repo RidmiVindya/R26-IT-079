@@ -151,77 +151,18 @@ async def predict_waste(batch_id: str):
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
 
-    predicted_waste = float(batch["rawWeight"]) * 0.15
+    raw_weight = float(batch["rawWeight"])
+
+    predicted_waste = raw_weight * 0.15
+
+    cleaned_weight = raw_weight - predicted_waste
 
     batches_collection.update_one(
         {"batchId": batch_id},
         {
             "$set": {
                 "predictedWaste": predicted_waste,
-                "updatedAt": datetime.now(),
-            }
-        }
-    )
-
-    message = generate_waste_notification_message(
-        batch["fishType"],
-        batch["batchId"],
-        predicted_waste
-    )
-
-    notification = {
-        "batchId": batch["batchId"],
-        "fishType": batch["fishType"],
-        "predictedWaste": predicted_waste,
-        "recipientType": "recycler",
-        "message": message,
-        "status": "generated",
-        "sentAt": datetime.now(),
-        "createdAt": datetime.now(),
-        "updatedAt": datetime.now(),
-    }
-
-    notifications_collection.insert_one(notification)
-
-    return {
-        "message": "Waste predicted and notification generated successfully",
-        "batch": {
-            "batchId": batch["batchId"],
-            "fishType": batch["fishType"],
-            "rawWeight": batch["rawWeight"],
-            "predictedWaste": predicted_waste,
-        },
-        "notification": serialize_doc(notification),
-    }
-
-
-async def predict_salt(batch_id: str, data: dict):
-    cleaned_weight = data.get("cleanedWeight")
-
-    if cleaned_weight is None:
-        raise HTTPException(status_code=400, detail="cleanedWeight is required")
-
-    batch = batches_collection.find_one({"batchId": batch_id})
-
-    if not batch:
-        raise HTTPException(status_code=404, detail="Batch not found")
-
-    cleaned_weight = float(cleaned_weight)
-
-    if cleaned_weight <= 0:
-        raise HTTPException(status_code=400, detail="cleanedWeight must be greater than 0")
-
-    salt_amount = cleaned_weight * 0.25
-    recommended_duration = calculate_recommended_duration(cleaned_weight)
-
-    batches_collection.update_one(
-        {"batchId": batch_id},
-        {
-            "$set": {
                 "cleanedWeight": cleaned_weight,
-                "saltAmount": salt_amount,
-                "recommendedDuration": recommended_duration,
-                "saltingDurationHours": recommended_duration,
                 "updatedAt": datetime.now(),
             }
         }
@@ -230,11 +171,55 @@ async def predict_salt(batch_id: str, data: dict):
     updated_batch = batches_collection.find_one({"batchId": batch_id})
 
     return {
-        "message": "Salt predicted successfully",
-         "cleanedWeight": cleaned_weight,
+        "message": "Waste predicted successfully",
+        "batch": {
+            "batchId": updated_batch["batchId"],
+            "fishType": updated_batch["fishType"],
+            "rawWeight": updated_batch["rawWeight"],
+            "predictedWaste": predicted_waste,
+            "cleanedWeight": cleaned_weight,
+        }
+    }
+   
+
+async def predict_salt(batch_id: str, data: dict = None):
+
+    batch = batches_collection.find_one({"batchId": batch_id})
+
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+
+    cleaned_weight = float(batch.get("cleanedWeight", 0))
+
+    if cleaned_weight <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Please predict waste first."
+        )
+
+    salt_amount = cleaned_weight * 0.25
+
+    recommended_duration = calculate_recommended_duration(cleaned_weight)
+
+    batches_collection.update_one(
+        {"batchId": batch_id},
+        {
+            "$set": {
                 "saltAmount": salt_amount,
+                "recommendedDuration": recommended_duration,
                 "saltingDurationHours": recommended_duration,
                 "updatedAt": datetime.now(),
+            }
+        }
+    )
+
+    return {
+        "message": "Salt predicted successfully",
+        "batchId": batch["batchId"],
+        "fishType": batch["fishType"],
+        "cleanedWeight": cleaned_weight,
+        "saltAmount": salt_amount,
+        "saltingDurationHours": recommended_duration,
     }
 
 
@@ -274,5 +259,45 @@ async def send_waste_notification(batch_id: str):
 
     return {
         "message": "Waste notification generated successfully",
-        "notification": serialize_doc(notification),
+        "notification": serialize_doc(notification),  
     }
+
+async def start_salting(batch_id: str):
+
+    batch = batches_collection.find_one({"batchId": batch_id})
+
+    if not batch:
+        raise HTTPException(
+            status_code=404,
+            detail="Batch not found"
+        )
+
+    start_time = datetime.now()
+
+    batches_collection.update_one(
+        {"batchId": batch_id},
+        {
+            "$set": {
+                "saltingStartTime": start_time,
+                "saltingStatus": "In Progress",
+                "initialSaltedWeight": batch["cleanedWeight"],
+                "currentWeight": batch["cleanedWeight"],
+                "updatedAt": datetime.now(),
+            }
+        }
+    )
+
+    updated_batch = batches_collection.find_one({"batchId": batch_id})
+
+    return {
+        "message": "Salting started successfully",
+        "batch": {
+            "batchId": updated_batch["batchId"],
+            "fishType": updated_batch["fishType"],
+            "saltingStartTime": updated_batch["saltingStartTime"],
+            "saltingStatus": updated_batch["saltingStatus"],
+            "initialSaltedWeight": updated_batch["initialSaltedWeight"],
+            "currentWeight": updated_batch["currentWeight"],
+        }
+    }
+
