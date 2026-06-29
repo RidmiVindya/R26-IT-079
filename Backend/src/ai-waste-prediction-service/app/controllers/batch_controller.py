@@ -417,3 +417,27 @@ async def get_traceability_dashboard():
         "inProgressBatches": in_progress,
         "recentRecords": recent
     }
+
+async def get_processing_reports():
+
+    batches = list(
+        batches_collection.find().sort("_id", -1)
+    )
+
+    reports = []
+
+    for batch in batches:
+
+        reports.append({
+            "batchId": batch.get("batchId"),
+            "fishType": batch.get("fishType"),
+            "date": batch.get("date", ""),
+            "rawWeight": batch.get("rawWeight", 0),
+            "predictedWaste": batch.get("predictedWaste", 0),
+            "wastePercentage": batch.get("wastePercentage", 0),
+            "status": batch.get("status", ""),
+        })
+
+    return {
+        "reports": reports
+    }
