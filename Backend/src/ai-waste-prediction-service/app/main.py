@@ -6,6 +6,7 @@ from app.routes.notification_routes import router as notification_router
 from app.routes.company_routes import router as company_router
 from app.routes.dashboard_routes import router as dashboard_router
 from app.routes.salting_routes import router as salting_router
+
     
 app = FastAPI()
 

@@ -373,3 +373,47 @@ async def salting_monitor(batch_id: str):
         "weightLossPercentage": round(weight_loss_percentage, 1),
         "remainingHours": round(remaining, 2),
     }
+
+async def get_traceability_dashboard():
+
+    batches = list(batches_collection.find())
+
+    total_batches = len(batches)
+
+    total_waste = 0
+    completed = 0
+    in_progress = 0
+
+    recent = []
+
+    for batch in batches:
+
+        waste = float(batch.get("predictedWaste", 0))
+        total_waste += waste
+
+        status = batch.get("saltingStatus", "not_started")
+
+        if status == "Completed":
+            completed += 1
+
+        elif status == "In Progress":
+            in_progress += 1
+
+        recent.append({
+            "batchId": batch["batchId"],
+            "fishType": batch["fishType"],
+            "date": batch.get("date", ""),
+            "predictedWaste": waste,
+            "rawWeight": batch.get("rawWeight", 0)
+        })
+
+    recent = recent[-5:]
+    recent.reverse()
+
+    return {
+        "totalBatches": total_batches,
+        "totalWaste": round(total_waste,2),
+        "completedBatches": completed,
+        "inProgressBatches": in_progress,
+        "recentRecords": recent
+    }

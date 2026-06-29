@@ -15,6 +15,19 @@ async def get_all_batches():
 async def get_batch_by_id(batch_id: str):
     return await batch_controller.get_batch_by_id(batch_id)
 
+
+# Dashboard FIRST
+@router.get("/dashboard")
+async def get_dashboard():
+    return await batch_controller.get_traceability_dashboard()
+
+
+# Then batch routes
+@router.get("/{batch_id}")
+async def get_batch_by_id(batch_id: str):
+    return await batch_controller.get_batch_by_id(batch_id)
+
+
 @router.put("/{batch_id}")
 async def update_batch(batch_id: str, data: dict = Body(...)):
     return await batch_controller.update_batch(batch_id, data)
@@ -44,4 +57,3 @@ async def send_waste_notification(batch_id: str):
     return await batch_controller.send_waste_notification(batch_id)
 
 
-    
