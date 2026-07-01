@@ -439,7 +439,6 @@ async def get_traceability_dashboard():
 
 async def get_processing_reports():
 
-    
     batches = list(
         batches_collection.find().sort("_id", -1)
     )
@@ -448,14 +447,19 @@ async def get_processing_reports():
 
     for batch in batches:
 
+        raw = float(batch.get("rawWeight", 0))
+        predicted = float(batch.get("predictedWaste", 0))
+
         reports.append({
             "batchId": batch.get("batchId"),
             "fishType": batch.get("fishType"),
             "date": batch.get("date", ""),
-            "rawWeight": batch.get("rawWeight", 0),
-            "predictedWaste": batch.get("predictedWaste", 0),
-            "wastePercentage": batch.get("wastePercentage", 0),
-            "status": batch.get("status", ""),
+            "rawWeight": raw,
+            "predictedWaste": predicted,
+            "wastePercentage": round((predicted / raw) * 100, 2) if raw > 0 else 0,
+
+            # ✅ Correct field
+            "status": batch.get("saltingStatus", "Not Started"),
         })
 
     return {
