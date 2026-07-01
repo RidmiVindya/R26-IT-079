@@ -376,50 +376,70 @@ async def salting_monitor(batch_id: str):
 
 async def get_traceability_dashboard():
 
-    batches = list(batches_collection.find())
+    batches = list(
+        batches_collection.find().sort("_id", -1)
+    )
 
     total_batches = len(batches)
 
     total_waste = 0
-    completed = 0
-    in_progress = 0
+    total_percentage = 0
 
-    recent = []
+    completed_batches = 0
+    in_progress_batches = 0
+
+    recent_batches = []
 
     for batch in batches:
 
-        waste = float(batch.get("predictedWaste", 0))
-        total_waste += waste
+        predicted = float(batch.get("predictedWaste", 0))
+        raw = float(batch.get("rawWeight", 0))
 
-        status = batch.get("saltingStatus", "not_started")
+        total_waste += predicted
 
-        if status == "Completed":
-            completed += 1
+        if raw > 0:
+            total_percentage += (predicted / raw) * 100
 
-        elif status == "In Progress":
-            in_progress += 1
+        # Read the correct database field
+        status = str(batch.get("saltingStatus", "")).strip().lower()
 
-        recent.append({
-            "batchId": batch["batchId"],
-            "fishType": batch["fishType"],
+        if status == "completed":
+            completed_batches += 1
+
+        elif status == "in progress":
+            in_progress_batches += 1
+
+        recent_batches.append({
+            "_id": str(batch["_id"]),
+            "batchId": batch.get("batchId"),
+            "fishType": batch.get("fishType"),
+            "rawWeight": raw,
+            "predictedWaste": predicted,
+            "wastePercentage": round((predicted / raw) * 100, 2) if raw > 0 else 0,
+            "status": batch.get("saltingStatus", ""),
             "date": batch.get("date", ""),
-            "predictedWaste": waste,
-            "rawWeight": batch.get("rawWeight", 0)
+            "location": batch.get("location", ""),
         })
 
-    recent = recent[-5:]
-    recent.reverse()
+    average_percentage = (
+        total_percentage / total_batches
+        if total_batches > 0
+        else 0
+    )
 
     return {
         "totalBatches": total_batches,
-        "totalWaste": round(total_waste,2),
-        "completedBatches": completed,
-        "inProgressBatches": in_progress,
-        "recentRecords": recent
+        "totalWasteKg": round(total_waste, 2),
+        "averageWastePercentage": round(average_percentage, 2),
+        "completedBatches": completed_batches,
+        "inProgressBatches": in_progress_batches,
+        "records": total_batches,
+        "recentBatches": recent_batches,
     }
 
 async def get_processing_reports():
 
+    
     batches = list(
         batches_collection.find().sort("_id", -1)
     )
