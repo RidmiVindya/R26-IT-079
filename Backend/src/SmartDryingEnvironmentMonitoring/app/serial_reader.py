@@ -5,11 +5,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-<<<<<<< Updated upstream
+
 SERIAL_PORT = os.getenv("SERIAL_PORT", "COM6")
-=======
-SERIAL_PORT = os.getenv("SERIAL_PORT", "COM4")
->>>>>>> Stashed changes
+
+
+
 BAUD_RATE = int(os.getenv("BAUD_RATE", 9600))
 
 arduino = None
