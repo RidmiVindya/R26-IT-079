@@ -1,7 +1,31 @@
 from app.serial_reader import read_sensor_block
 
+# ============================
+# HX711 Calibration
+# ============================
+
+RAW_ZERO = 78959          # Empty tray value
+COUNTS_PER_KG = 194650.0  # Change after calibration
+
+
+def raw_to_kg(raw):
+    """
+    Convert HX711 raw value to kilograms.
+    """
+
+    if raw is None:
+        return 0.0
+
+    kg = (raw - RAW_ZERO) / COUNTS_PER_KG
+
+    if kg < 0:
+        kg = 0
+
+    return round(kg, 2)
+
 
 def get_live_sensor_data():
+
     lines = read_sensor_block()
 
     data = {
@@ -9,7 +33,11 @@ def get_live_sensor_data():
         "humidity": None,
         "ds_temperature": None,
         "gas": None,
-        "weight": None,
+
+        # store both
+        "raw_weight": None,
+        "weight": 0.0,
+
         "heater": False,
         "light": False,
         "fan": False
@@ -38,9 +66,13 @@ def get_live_sensor_data():
             )
 
         elif "Load Cell Raw:" in line:
-            data["weight"] = int(
+
+            raw = int(
                 line.split(":")[1].strip()
             )
+
+            data["raw_weight"] = raw
+            data["weight"] = raw_to_kg(raw)
 
         elif "Heater/Dry Air:" in line:
             state = line.split(":")[1].strip()
