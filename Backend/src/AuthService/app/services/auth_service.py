@@ -59,11 +59,33 @@ Regards,
 Smart Karawala Team
 """
 
-    send_email(
+    html_body = f"""
+<html>
+  <body style="font-family: Arial, sans-serif; color: #222; line-height: 1.6;">
+    <p>Hello {user.full_name},</p>
+    <p>Welcome to Smart Karawala.</p>
+    <p>Your account verification code is:</p>
+    <div style="font-size: 28px; font-weight: 700; letter-spacing: 4px; margin: 16px 0; color: #0f172a;">
+      {otp}
+    </div>
+    <p>This OTP is valid for 5 minutes.</p>
+    <p>Regards,<br>Smart Karawala Team</p>
+  </body>
+</html>
+"""
+
+    email_sent = send_email(
         receiver_email=user.email,
         subject="Smart Karawala - Account Verification",
-        body=body
+        body=body,
+        html_body=html_body
     )
+
+    if not email_sent:
+        return {
+            "success": False,
+            "message": "Registration saved, but verification email could not be sent."
+        }
 
     return {
         "success": True,
@@ -198,11 +220,17 @@ Regards,
 Smart Karawala Team
 """
 
-    send_email(
+    email_sent = send_email(
         receiver_email=data.email,
         subject="Smart Karawala - Reset Password",
         body=body
     )
+
+    if not email_sent:
+        return {
+            "success": False,
+            "message": "Reset OTP could not be sent."
+        }
 
     return {
         "success": True,
@@ -292,11 +320,32 @@ Regards,
 Smart Karawala Team
 """
 
-    send_email(
+    html_body = f"""
+<html>
+  <body style="font-family: Arial, sans-serif; color: #222; line-height: 1.6;">
+    <p>Hello {user['full_name']},</p>
+    <p>Your new verification code is:</p>
+    <div style="font-size: 28px; font-weight: 700; letter-spacing: 4px; margin: 16px 0; color: #0f172a;">
+      {otp}
+    </div>
+    <p>This OTP is valid for 5 minutes.</p>
+    <p>Regards,<br>Smart Karawala Team</p>
+  </body>
+</html>
+"""
+
+    email_sent = send_email(
         receiver_email=data.email,
         subject="Smart Karawala - New Verification OTP",
-        body=body
+        body=body,
+        html_body=html_body
     )
+
+    if not email_sent:
+        return {
+            "success": False,
+            "message": "Verification OTP could not be sent."
+        }
 
     return {
         "success": True,
