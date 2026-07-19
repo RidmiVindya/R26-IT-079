@@ -1,12 +1,22 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from app.serial_reader import connect_arduino, read_sensor_block
 from app.background_service import auto_save_sensor_data
 from app.routes import router
 
 import asyncio
+
 app = FastAPI(
     title="Smart Drying Environment Monitoring Service",
     version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(router, prefix="/api")

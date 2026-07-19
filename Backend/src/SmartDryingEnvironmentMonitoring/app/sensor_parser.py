@@ -29,18 +29,25 @@ def get_live_sensor_data():
     lines = read_sensor_block()
 
     data = {
-        "temperature": None,
-        "humidity": None,
-        "ds_temperature": None,
-        "gas": None,
+        "device_id": "ARDUINO-NANO",
+    "online": True,
 
-        # store both
-        "raw_weight": None,
-        "weight": 0.0,
+    "temperature": None,
+    "humidity": None,
+    "ds_temperature": None,
+    "gas": None,
 
-        "heater": False,
-        "light": False,
-        "fan": False
+    "raw_weight": None,
+    "weight": 0.0,
+
+    "progress": 62,
+
+    "target_temperature": 50,
+    "target_humidity": 40,
+
+    "heater": False,
+    "light": False,
+    "fan": False
     }
 
     for line in lines:
@@ -86,4 +93,4 @@ def get_live_sensor_data():
             state = line.split(":")[1].strip()
             data["fan"] = state == "ON"
 
-    return 
+    return data
