@@ -288,7 +288,9 @@ class DryingController:
                 self._fault(session, "Chamber humidity is missing or invalid")
                 return reading
             if session["mode"] == ControlMode.MANUAL.value:
-                if self._duration_reached(session):
+                if self._completion_weight_reached(session, reading):
+                    self._begin_completion(session, reading)
+                elif self._duration_reached(session):
                     self.stop(session["batch_id"], reason="duration_target_reached")
                 else:
                     self._manual_target_control(session, reading)
@@ -300,10 +302,7 @@ class DryingController:
                 self._fault(session, "Current batch weight exceeds captured initial weight")
                 return reading
 
-            if (
-                float(reading["weight"]) <= float(session["completion_weight_kg"])
-                and (not session.get("predicted_duration_minutes") or self._duration_reached(session))
-            ):
+            if self._completion_weight_reached(session, reading) or self._duration_reached(session):
                 self._begin_completion(session, reading)
                 return reading
 
@@ -315,6 +314,12 @@ class DryingController:
     def _duration_reached(session: dict) -> bool:
         duration_ends_at = session.get("duration_ends_at")
         return duration_ends_at is not None and utcnow() >= duration_ends_at
+
+    def _completion_weight_reached(self, session: dict, reading: dict) -> bool:
+        return (
+            self._valid_weight(reading.get("weight"))
+            and float(reading["weight"]) <= float(session["completion_weight_kg"])
+        )
 
     @staticmethod
     def _manual_temperature_limit_reached(session: dict) -> bool:

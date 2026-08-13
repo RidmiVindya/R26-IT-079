@@ -96,6 +96,7 @@ def test_manual_targets_control_heater_and_exhaust_fan_while_light_is_manual(mon
         target_temperature_c=40,
         target_humidity_percent=12,
         source="operator_override",
+        cooling_duration_seconds=0,
     ))
 
     started = controller.start("BATCH-MANUAL", ControlMode.MANUAL, reading(temperature=39.0, humidity=55.0))
@@ -123,7 +124,7 @@ def test_manual_targets_control_heater_and_exhaust_fan_while_light_is_manual(mon
     assert stopped.stop_reason == "operator_stop"
 
 
-def test_manual_duration_stops_relays_and_auto_requires_duration_and_weight(monkeypatch):
+def test_duration_or_one_third_weight_completes_drying(monkeypatch):
     store = install_fake_dependencies(monkeypatch)
     controller = DryingController()
     controller.create_profile(ControlProfileRequest(
@@ -141,16 +142,25 @@ def test_manual_duration_stops_relays_and_auto_requires_duration_and_weight(monk
     assert manual_session["stop_reason"] == "duration_target_reached"
 
     controller.create_profile(ControlProfileRequest(
+        batch_id="BATCH-MANUAL-WEIGHT",
+        target_temperature_c=40,
+        target_humidity_percent=12,
+        source="operator_override",
+        cooling_duration_seconds=0,
+    ))
+    controller.start("BATCH-MANUAL-WEIGHT", ControlMode.MANUAL, reading(temperature=39.0))
+    controller.process_reading(reading(weight=3.0, temperature=39.0))
+    assert store.get("BATCH-MANUAL-WEIGHT")["status"] == "COOLING"
+    controller.process_reading(reading(weight=3.0, temperature=39.0))
+    assert store.get("BATCH-MANUAL-WEIGHT")["status"] == "COMPLETED"
+
+    controller.create_profile(ControlProfileRequest(
         batch_id="BATCH-AUTO-TIME",
         target_temperature_c=50,
         target_humidity_percent=40,
         predicted_duration_minutes=60,
     ))
     controller.start("BATCH-AUTO-TIME", ControlMode.AUTO, reading())
-    controller.process_reading(reading(weight=3.0))
-    assert store.get("BATCH-AUTO-TIME")["status"] == "DRYING"
-
-    store.update("BATCH-AUTO-TIME", duration_ends_at=datetime.now(timezone.utc) - timedelta(seconds=1))
     controller.process_reading(reading(weight=3.0))
     assert store.get("BATCH-AUTO-TIME")["status"] == "COOLING"
 

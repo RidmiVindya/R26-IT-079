@@ -60,9 +60,10 @@ Targets must come from the team's agreed parameter/prediction profile.
 The service takes a fresh sensor reading before starting. It rejects the request
 if chamber temperature, humidity, or a positive batch weight is unavailable.
 
-When `predicted_duration_minutes` is supplied, MANUAL sessions stop all relays
-at the duration target. AUTO sessions complete only after both the duration and
-weight targets are reached.
+Both AUTO and MANUAL sessions finish drying when either the target duration is
+reached or the batch reaches its completion weight (one third of its captured
+starting weight). Completion turns the heater and light off, then runs the
+exhaust fan for the cooling period.
 
 `POST /api/iot/sessions/{batch_id}/stop`
 
