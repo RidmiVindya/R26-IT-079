@@ -1,14 +1,34 @@
+import asyncio
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.serial_reader import connect_arduino, read_sensor_block
+from app.serial_reader import close_arduino, connect_arduino, is_arduino_connected
 from app.background_service import auto_save_sensor_data
+from app.drying_controller import controller
 from app.routes import router
 
-import asyncio
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    await asyncio.to_thread(connect_arduino)
+    await asyncio.to_thread(controller.recover_after_startup)
+    task = asyncio.create_task(auto_save_sensor_data())
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        await asyncio.to_thread(controller.shutdown_safely)
+        await asyncio.to_thread(close_arduino)
 
 app = FastAPI(
     title="Smart Drying Environment Monitoring Service",
-    version="1.0.0"
+    version="2.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -22,13 +42,6 @@ app.add_middleware(
 app.include_router(router, prefix="/api")
 
 
-@app.on_event("startup")
-async def startup_event():
-    connect_arduino()
-
-    asyncio.create_task(auto_save_sensor_data())
-
-
 @app.get("/")
 def root():
     return {
@@ -40,13 +53,6 @@ def root():
 @app.get("/health")
 def health_check():
     return {
-        "status": "healthy"
-    }
-
-
-@app.get("/api/iot/raw")
-def get_raw_sensor_data():
-    block = read_sensor_block()
-    return {
-        "raw_data": block
+        "status": "healthy" if is_arduino_connected() else "degraded",
+        "serial_connected": is_arduino_connected(),
     }
