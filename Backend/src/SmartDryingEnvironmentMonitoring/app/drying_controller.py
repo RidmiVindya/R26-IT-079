@@ -80,6 +80,7 @@ class DryingController:
                 "cooling_ends_at": None,
                 "completed_at": None,
                 "stopped_at": None,
+                "stop_reason": None,
                 "fault_reason": None,
                 "last_sensor_at": None,
                 "heater_commanded": False,
@@ -118,12 +119,12 @@ class DryingController:
                 raise ControllerError("Cannot start drying without a valid positive batch weight")
             if not self._valid_temperature(reading.get("temperature")):
                 raise ControllerError("Cannot start drying without a valid chamber temperature")
-            if mode == ControlMode.AUTO and not (
+            if not (
                 isinstance(reading.get("humidity"), (int, float))
                 and math.isfinite(reading["humidity"])
                 and 0 <= reading["humidity"] <= 100
             ):
-                raise ControllerError("Cannot start AUTO drying without a valid chamber humidity")
+                raise ControllerError("Cannot start drying without a valid chamber humidity")
 
             active = get_active_session()
             if active and active["batch_id"] != batch_id:
@@ -152,6 +153,7 @@ class DryingController:
                 "last_sensor_at": reading["timestamp"],
                 "fault_reason": None,
                 "stopped_at": None,
+                "stop_reason": None,
                 "completed_at": None,
                 "cooling_ends_at": None,
                 "completion_event_emitted": False,
@@ -168,6 +170,8 @@ class DryingController:
 
             if mode == ControlMode.AUTO:
                 session = self._automatic_control(session, reading)
+            else:
+                session = self._manual_target_control(session, reading)
             return self._model(session)
 
     def set_mode(self, batch_id: str, mode: ControlMode) -> DryingSession:
@@ -201,9 +205,9 @@ class DryingController:
                 raise ConflictError("Manual actuator control requires an active MANUAL drying session")
             if heater is None and fan is None and light is None:
                 raise ControllerError("At least one actuator state is required")
-            if heater is True and self._manual_temperature_limit_reached(session):
+            if heater is not None or fan is not None:
                 raise ConflictError(
-                    "Heater is blocked because chamber temperature is at or above the MANUAL target"
+                    "Heater and exhaust fan are controlled automatically by the MANUAL target conditions"
                 )
             session = self._apply_actuators(session, heater=heater, fan=fan, light=light)
             save_event(batch_id, "MANUAL_ACTUATOR_COMMAND", {
@@ -237,6 +241,7 @@ class DryingController:
                 batch_id,
                 status=DryingStatus.STOPPED.value,
                 stopped_at=utcnow(),
+                stop_reason=reason,
                 fault_reason=None,
             )
             save_event(batch_id, "DRYING_STOPPED", {"reason": reason})
@@ -272,33 +277,27 @@ class DryingController:
 
             if session["status"] != DryingStatus.DRYING.value:
                 return reading
-            if session["mode"] == ControlMode.MANUAL.value:
-                if self._manual_temperature_limit_reached(session):
-                    if session["heater_commanded"]:
-                        self._apply_actuators(session, heater=False, fan=None)
-                        save_event(session["batch_id"], "MANUAL_HEATER_SAFETY_CUTOFF", {
-                            "temperature_c": reading["temperature"],
-                            "target_temperature_c": session["target_temperature_c"],
-                        })
-                if self._duration_reached(session):
-                    self.stop(session["batch_id"], reason="duration_target_reached")
-                return reading
             if not self._valid_temperature(reading.get("temperature")):
                 self._fault(session, "Chamber temperature is missing or invalid")
+                return reading
+            if not (
+                isinstance(reading.get("humidity"), (int, float))
+                and math.isfinite(reading["humidity"])
+                and 0 <= reading["humidity"] <= 100
+            ):
+                self._fault(session, "Chamber humidity is missing or invalid")
+                return reading
+            if session["mode"] == ControlMode.MANUAL.value:
+                if self._duration_reached(session):
+                    self.stop(session["batch_id"], reason="duration_target_reached")
+                else:
+                    self._manual_target_control(session, reading)
                 return reading
             if not self._valid_weight(reading.get("weight")):
                 self._fault(session, "Batch weight is missing or invalid")
                 return reading
             if float(reading["weight"]) > float(session["initial_weight_kg"]):
                 self._fault(session, "Current batch weight exceeds captured initial weight")
-                return reading
-
-            if session["mode"] == ControlMode.AUTO.value and not (
-                isinstance(reading.get("humidity"), (int, float))
-                and math.isfinite(reading["humidity"])
-                and 0 <= reading["humidity"] <= 100
-            ):
-                self._fault(session, "Chamber humidity is missing or invalid in AUTO mode")
                 return reading
 
             if (
@@ -342,6 +341,14 @@ class DryingController:
                 fan = False
 
         return self._apply_actuators(session, heater=heater, fan=fan)
+
+    def _manual_target_control(self, session: dict, reading: dict) -> dict:
+        """Apply only the temperature/humidity values entered by the operator."""
+        temperature = float(reading["temperature"])
+        humidity = float(reading["humidity"])
+        heater = temperature < session["target_temperature_c"]
+        exhaust_fan = humidity > session["target_humidity_percent"]
+        return self._apply_actuators(session, heater=heater, fan=exhaust_fan)
 
     def _apply_actuators(
         self,
@@ -425,6 +432,7 @@ class DryingController:
         update_session(
             session["batch_id"],
             status=DryingStatus.FAULT.value,
+            stop_reason="safety_fault",
             fault_reason=reason,
             heater_commanded=False,
             fan_commanded=False,

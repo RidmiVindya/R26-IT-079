@@ -88,7 +88,7 @@ def test_auto_control_and_weight_completion_are_one_time(monkeypatch):
     assert len([event for event in store.events if event[1] == "WEIGHT_COMPLETION_REACHED"]) == 1
 
 
-def test_manual_session_can_control_heater_fan_and_light(monkeypatch):
+def test_manual_targets_control_heater_and_exhaust_fan_while_light_is_manual(monkeypatch):
     store = install_fake_dependencies(monkeypatch)
     controller = DryingController()
     controller.create_profile(ControlProfileRequest(
@@ -98,11 +98,14 @@ def test_manual_session_can_control_heater_fan_and_light(monkeypatch):
         source="operator_override",
     ))
 
-    controller.start("BATCH-MANUAL", ControlMode.MANUAL, reading(temperature=39.0))
+    started = controller.start("BATCH-MANUAL", ControlMode.MANUAL, reading(temperature=39.0, humidity=55.0))
+    assert started.heater_commanded is True
+    assert started.fan_commanded is True
+
     updated = controller.manual_actuators(
         "BATCH-MANUAL",
-        heater=True,
-        fan=True,
+        heater=None,
+        fan=None,
         light=True,
     )
 
@@ -110,8 +113,14 @@ def test_manual_session_can_control_heater_fan_and_light(monkeypatch):
     assert updated.fan_commanded is True
     assert updated.light_commanded is True
 
+    controller.process_reading(reading(temperature=40.0, humidity=12.0))
+    updated = store.get("BATCH-MANUAL")
+    assert updated["heater_commanded"] is False
+    assert updated["fan_commanded"] is False
+
     stopped = controller.stop("BATCH-MANUAL")
     assert stopped.light_commanded is False
+    assert stopped.stop_reason == "operator_stop"
 
 
 def test_manual_duration_stops_relays_and_auto_requires_duration_and_weight(monkeypatch):
@@ -125,10 +134,11 @@ def test_manual_duration_stops_relays_and_auto_requires_duration_and_weight(monk
         source="operator_override",
     ))
     controller.start("BATCH-MANUAL-TIME", ControlMode.MANUAL, reading(temperature=39.0))
-    controller.manual_actuators("BATCH-MANUAL-TIME", heater=True, fan=None, light=None)
     store.update("BATCH-MANUAL-TIME", duration_ends_at=datetime.now(timezone.utc) - timedelta(seconds=1))
     controller.process_reading(reading(temperature=39.0))
-    assert store.get("BATCH-MANUAL-TIME")["status"] == "STOPPED"
+    manual_session = store.get("BATCH-MANUAL-TIME")
+    assert manual_session["status"] == "STOPPED"
+    assert manual_session["stop_reason"] == "duration_target_reached"
 
     controller.create_profile(ControlProfileRequest(
         batch_id="BATCH-AUTO-TIME",
@@ -154,21 +164,20 @@ def test_manual_heater_turns_off_at_temperature_target(monkeypatch):
         target_humidity_percent=12,
         source="operator_override",
     ))
-    controller.start("BATCH-MANUAL-TEMP", ControlMode.MANUAL, reading(temperature=39.0))
-    controller.manual_actuators("BATCH-MANUAL-TEMP", heater=True, fan=None, light=None)
+    started = controller.start("BATCH-MANUAL-TEMP", ControlMode.MANUAL, reading(temperature=39.0))
+    assert started.heater_commanded is True
 
     controller.process_reading(reading(temperature=41.2))
     session = store.get("BATCH-MANUAL-TEMP")
     assert session["status"] == "DRYING"
     assert session["heater_commanded"] is False
-    assert any(event[1] == "MANUAL_HEATER_SAFETY_CUTOFF" for event in store.events)
 
     try:
         controller.manual_actuators("BATCH-MANUAL-TEMP", heater=True, fan=None, light=None)
     except ConflictError:
         pass
     else:
-        raise AssertionError("Heater must remain blocked while the target is exceeded")
+        raise AssertionError("Heater must be controlled by the MANUAL target conditions")
 
 
 def test_parser_preserves_missing_weight_and_marks_bad_humidity():

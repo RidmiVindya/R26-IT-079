@@ -100,6 +100,7 @@ class DryingSession(BaseModel):
     cooling_ends_at: datetime | None = None
     completed_at: datetime | None = None
     stopped_at: datetime | None = None
+    stop_reason: str | None = None
     fault_reason: str | None = None
     last_sensor_at: datetime | None = None
     heater_commanded: bool = False
