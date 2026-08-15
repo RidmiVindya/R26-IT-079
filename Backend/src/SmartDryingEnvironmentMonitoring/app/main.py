@@ -40,3 +40,14 @@ def get_raw_sensor_data():
     return {
         "raw_data": block
     }
+
+
+if __name__ == "__main__":
+    import os
+    import uvicorn
+
+    # Default 8002 to avoid clashing with the waste-prediction service (8000).
+    port = int(os.getenv("PORT", 8002))
+    host = os.getenv("HOST", "0.0.0.0")
+
+    uvicorn.run("app.main:app", host=host, port=port, reload=True)

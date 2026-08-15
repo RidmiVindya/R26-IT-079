@@ -16,6 +16,14 @@ class Settings(BaseSettings):
     INITIAL_DRYING_TIME_MODEL_PATH: str = "app/ml_models/initial_drying_time_model.pkl"
     SPOILAGE_RISK_MODEL_PATH: str = "app/ml_models/spoilage_risk_model.pkl"
 
+    # --- Integration with sibling services -------------------------------
+    # Jayani's waste/salt/batch service (owns batch data).
+    JAYANI_API_URL: str = "http://localhost:8000"
+    # Milan's IoT drying-oven service (live sensor readings).
+    MILAN_API_URL: str = "http://localhost:8002"
+    # Collection holding the single active drying batch pointer.
+    MONGO_COLLECTION_ACTIVE_DRYING: str = "active_drying_batch"
+
     ALLOWED_FISH_TYPES: tuple = (
         "sprats",
         "salaya",

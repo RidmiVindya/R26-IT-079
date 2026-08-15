@@ -86,4 +86,4 @@ def get_live_sensor_data():
             state = line.split(":")[1].strip()
             data["fan"] = state == "ON"
 
-    return 
+    return data

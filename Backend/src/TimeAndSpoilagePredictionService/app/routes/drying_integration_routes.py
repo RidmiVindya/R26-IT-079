@@ -1,0 +1,398 @@
+"""Integration routes tying together Jayani's batches and Milan's sensors.
+
+Workflow:
+  1. A batch finishes salting in Jayani's service and is placed in the drying
+     oven. The user calls POST /api/drying/start with that batchId. We fetch the
+     batch from Jayani, snapshot its fish type + weight, and mark it as the one
+     active drying batch.
+  2. GET /api/drying/active/drying-time and .../spoilage-risk pull the latest
+     sensor reading from Milan, combine it with the active batch's data, and run
+     the existing prediction models — no manual feature entry required.
+
+These routes are additive; the standalone /api/predict/* routes are untouched.
+"""
+from __future__ import annotations
+
+import logging
+from datetime import datetime, timezone
+from typing import Any
+
+from fastapi import APIRouter, Body, Depends, HTTPException, status
+
+from app.config import settings
+from app.models.prediction_record import build_prediction_record
+from app.routes.prediction_routes import _persist
+from app.schemas.prediction_schema import (
+    DryingTimeResponse,
+    SpoilageRiskResponse,
+    DryingTimeRequest,
+    SpoilageRiskRequest,
+    Factor,
+)
+from app.services import active_batch_store
+from app.services.batch_client import (
+    BatchNotFoundError,
+    BatchServiceUnavailableError,
+    fetch_batch,
+    normalize_fish_type,
+)
+from app.services.drying_time_service import DryingTimeService, get_drying_time_service
+from app.services.sensor_client import (
+    SensorServiceUnavailableError,
+    fetch_live_reading,
+)
+from app.services.spoilage_risk_service import (
+    SpoilageRiskService,
+    get_spoilage_risk_service,
+)
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/drying", tags=["Drying Integration"])
+
+
+def _clamp(value: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, value))
+
+
+def _starting_weight(batch: dict[str, Any]) -> float:
+    """Weight the batch enters the dryer with.
+
+    After cutting, Jayani stores the post-cut weight as `cleanedWeight`; if that
+    is not populated we fall back to `rawWeight`.
+    """
+    cleaned = batch.get("cleanedWeight") or 0
+    if cleaned and float(cleaned) > 0:
+        return float(cleaned)
+    return float(batch.get("rawWeight") or 0)
+
+
+# ---------------------------------------------------------------------------
+# Explanation factors — mirror the thresholds used by the spoilage model
+# (spoilage_risk_service._rule_based_predict + classify_smell_level) so the
+# detail screens can show "current vs expected" and why the risk is what it is.
+# ---------------------------------------------------------------------------
+def _spoilage_factors(req: "SpoilageRiskRequest", smell_level: str) -> list[Factor]:
+    factors: list[Factor] = []
+
+    # Gas / MQ-136 -> smell level: <=300 Low, <=600 Medium, >600 High.
+    gas = float(req.mq136_value)
+    if gas <= 300:
+        gas_status, gas_effect = "good", "Within safe range — low odour, minimal risk."
+    elif gas <= 600:
+        gas_status, gas_effect = "elevated", "Elevated gas — moderate odour, raises risk."
+    else:
+        gas_status, gas_effect = "high", "High gas — strong odour, strongly raises risk."
+    factors.append(Factor(
+        key="gas", label="Gas (MQ-136)", value=round(gas, 1), unit="ppm",
+        normal_range="≤ 300 ppm", status=gas_status,
+        effect=f"{gas_effect} Current smell level: {smell_level}.",
+    ))
+
+    # Humidity: <65 normal, 65-79 elevated, >=80 high.
+    hum = float(req.humidity_percent)
+    if hum >= 80:
+        hum_status, hum_effect = "high", "Very humid — slows moisture loss, raises spoilage risk."
+    elif hum >= 65:
+        hum_status, hum_effect = "elevated", "Somewhat humid — mild upward effect on risk."
+    else:
+        hum_status, hum_effect = "good", "Dry enough for healthy drying."
+    factors.append(Factor(
+        key="humidity", label="Humidity", value=round(hum, 1), unit="%",
+        normal_range="< 65 %", status=hum_status, effect=hum_effect,
+    ))
+
+    # Temperature: 20-45 normal, >=45 high, <=20 low.
+    temp = float(req.temperature_c)
+    if temp >= 45:
+        temp_status, temp_effect = "high", "Too hot — can spoil the batch, raises risk."
+    elif temp <= 20:
+        temp_status, temp_effect = "low", "Too cool — slow drying can raise risk."
+    else:
+        temp_status, temp_effect = "good", "In the ideal drying range."
+    factors.append(Factor(
+        key="temperature", label="Temperature", value=round(temp, 1), unit="°C",
+        normal_range="20 – 45 °C", status=temp_status, effect=temp_effect,
+    ))
+
+    # Weight-loss %: stalled if <30% after 36h of drying.
+    wl = float(req.weight_loss_percentage)
+    elapsed = float(req.elapsed_drying_time_hours)
+    if elapsed >= 36 and wl < 30:
+        wl_status = "elevated"
+        wl_effect = "Drying has stalled (little weight lost after 36h) — raises risk."
+    else:
+        wl_status = "good"
+        wl_effect = "Weight loss is progressing normally for the elapsed time."
+    factors.append(Factor(
+        key="weight_loss", label="Weight Loss", value=round(wl, 1), unit="%",
+        normal_range="≥ 30 % by 36 h", status=wl_status, effect=wl_effect,
+    ))
+
+    return factors
+
+
+def _drying_time_factors(req: "DryingTimeRequest") -> list[Factor]:
+    factors: list[Factor] = []
+
+    weight_lost = max(0.0, req.initial_weight_kg - req.current_weight_kg)
+    loss_pct = (weight_lost / req.initial_weight_kg * 100.0) if req.initial_weight_kg else 0.0
+    factors.append(Factor(
+        key="current_weight", label="Current Weight", value=round(req.current_weight_kg, 2),
+        unit="kg", normal_range=f"from {round(req.initial_weight_kg, 2)} kg",
+        status="good",
+        effect=f"Lost {round(weight_lost, 2)} kg ({round(loss_pct, 1)}%) so far — "
+               "less remaining weight means less drying time left.",
+    ))
+
+    rate = float(req.weight_loss_rate)
+    if rate <= 0.05:
+        rate_status, rate_effect = "low", "Very slow moisture loss — lengthens the estimate."
+    elif rate < 0.6:
+        rate_status, rate_effect = "good", "Healthy drying rate."
+    else:
+        rate_status, rate_effect = "elevated", "Rapid moisture loss — shortens the estimate."
+    factors.append(Factor(
+        key="weight_loss_rate", label="Weight-loss Rate", value=round(rate, 3),
+        unit="kg/h", normal_range="0.1 – 0.6 kg/h", status=rate_status, effect=rate_effect,
+    ))
+
+    temp = float(req.temperature_c)
+    if temp >= 45:
+        t_status, t_effect = "high", "Very hot — dries faster but watch spoilage."
+    elif temp < 25:
+        t_status, t_effect = "low", "Cooler oven — slower drying, longer time."
+    else:
+        t_status, t_effect = "good", "Good drying temperature."
+    factors.append(Factor(
+        key="temperature", label="Temperature", value=round(temp, 1), unit="°C",
+        normal_range="25 – 45 °C", status=t_status, effect=t_effect,
+    ))
+
+    hum = float(req.humidity_percent)
+    if hum >= 65:
+        h_status, h_effect = "elevated", "Humid air holds moisture — lengthens drying time."
+    else:
+        h_status, h_effect = "good", "Dry air helps the batch dry faster."
+    factors.append(Factor(
+        key="humidity", label="Humidity", value=round(hum, 1), unit="%",
+        normal_range="< 65 %", status=h_status, effect=h_effect,
+    ))
+
+    factors.append(Factor(
+        key="elapsed", label="Elapsed Drying", value=round(float(req.elapsed_drying_time_hours), 2),
+        unit="h", normal_range="—", status="good",
+        effect="Time already spent drying, used to gauge progress.",
+    ))
+
+    return factors
+
+
+# ---------------------------------------------------------------------------
+# Start / inspect the active drying batch
+# ---------------------------------------------------------------------------
+@router.post("/start", summary="Start drying a batch (set it active)")
+async def start_drying(payload: dict = Body(..., example={"batchId": "BATCH-1700000000000"})):
+    batch_id = (payload or {}).get("batchId") or (payload or {}).get("batch_id")
+    if not batch_id:
+        raise HTTPException(status_code=400, detail="batchId is required")
+
+    try:
+        batch = await fetch_batch(str(batch_id))
+    except BatchNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except BatchServiceUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    fish_type = normalize_fish_type(batch)
+    if not fish_type:
+        raise HTTPException(
+            status_code=422,
+            detail="Batch has no usable fishType for drying prediction",
+        )
+    if fish_type not in settings.ALLOWED_FISH_TYPES:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Batch fishType '{fish_type}' is not supported by the drying "
+                f"models. Allowed: {', '.join(settings.ALLOWED_FISH_TYPES)}"
+            ),
+        )
+
+    initial_weight = _starting_weight(batch)
+    if initial_weight <= 0:
+        raise HTTPException(
+            status_code=422,
+            detail="Batch has no usable weight (cleanedWeight/rawWeight) for drying",
+        )
+
+    record = await active_batch_store.set_active_batch(
+        batch_id=str(batch_id),
+        fish_type=fish_type,
+        initial_weight_kg=initial_weight,
+        raw_batch=batch,
+    )
+
+    return {
+        "message": "Drying started for batch",
+        "batchId": record["batch_id"],
+        "fishType": record["fish_type"],
+        "initialWeightKg": record["initial_weight_kg"],
+        "dryingStartedAt": record["drying_started_at"],
+    }
+
+
+@router.get("/active", summary="Get the current active drying batch")
+async def get_active():
+    active = await active_batch_store.get_active_batch()
+    if not active:
+        raise HTTPException(status_code=404, detail="No active drying batch")
+    return {
+        "batchId": active["batch_id"],
+        "fishType": active["fish_type"],
+        "initialWeightKg": active["initial_weight_kg"],
+        "dryingStartedAt": active.get("drying_started_at"),
+        "elapsedDryingHours": round(active_batch_store.elapsed_drying_hours(active), 2),
+    }
+
+
+@router.post("/stop", summary="Stop drying (clear the active batch)")
+async def stop_drying():
+    active = await active_batch_store.get_active_batch()
+    await active_batch_store.clear_active_batch()
+    return {
+        "message": "Drying stopped",
+        "batchId": active.get("batch_id") if active else None,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Predictions for the active batch, using live sensor data
+# ---------------------------------------------------------------------------
+async def _require_active_and_sensors() -> tuple[dict[str, Any], dict[str, Any]]:
+    active = await active_batch_store.get_active_batch()
+    if not active:
+        raise HTTPException(
+            status_code=404,
+            detail="No active drying batch. Call POST /api/drying/start first.",
+        )
+    try:
+        sensor = await fetch_live_reading()
+    except SensorServiceUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    return active, sensor
+
+
+@router.get(
+    "/active/drying-time",
+    response_model=DryingTimeResponse,
+    summary="Predict remaining drying time for the active batch",
+)
+async def active_drying_time(
+    service: DryingTimeService = Depends(get_drying_time_service),
+):
+    active, sensor = await _require_active_and_sensors()
+
+    initial_weight = float(active["initial_weight_kg"])
+    current_weight = float(sensor.get("weight") or 0.0)
+    # Current weight can't exceed the starting weight (sensor noise / empty tray).
+    current_weight = _clamp(current_weight, 0.0, initial_weight)
+
+    elapsed = active_batch_store.elapsed_drying_hours(active)
+    weight_lost = max(0.0, initial_weight - current_weight)
+    # Guard against a near-zero elapsed time (e.g. predicting seconds after
+    # drying starts) producing an absurd kg/hour rate. Require at least a small
+    # window, and cap the rate to a physically sensible ceiling.
+    MIN_ELAPSED_FOR_RATE = 0.5   # hours
+    MAX_WEIGHT_LOSS_RATE = 5.0   # kg/hour
+    if elapsed >= MIN_ELAPSED_FOR_RATE:
+        weight_loss_rate = min(weight_lost / elapsed, MAX_WEIGHT_LOSS_RATE)
+    else:
+        # Too early to observe a meaningful rate; assume none yet.
+        weight_loss_rate = 0.0
+
+    try:
+        req = DryingTimeRequest(
+            fish_type=active["fish_type"],
+            initial_weight_kg=initial_weight,
+            current_weight_kg=current_weight,
+            temperature_c=_clamp(float(sensor.get("temperature") or 0.0), -10, 120),
+            humidity_percent=_clamp(float(sensor.get("humidity") or 0.0), 0, 100),
+            elapsed_drying_time_hours=_clamp(elapsed, 0, 240),
+            weight_loss_rate=max(0.0, weight_loss_rate),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid derived inputs: {exc}")
+
+    predicted_hours, model_used = service.predict(req)
+    created_at = datetime.now(timezone.utc)
+
+    await _persist(
+        build_prediction_record(
+            batch_id=active["batch_id"],
+            prediction_type="drying_time",
+            inputs={**req.model_dump(), "source": "integrated", "sensor": sensor},
+            predicted_drying_time_hours=predicted_hours,
+            model_used=model_used,
+        )
+    )
+
+    return DryingTimeResponse(
+        batch_id=active["batch_id"],
+        predicted_remaining_drying_time_hours=predicted_hours,
+        model_used=model_used,
+        created_at=created_at,
+        factors=_drying_time_factors(req),
+    )
+
+
+@router.get(
+    "/active/spoilage-risk",
+    response_model=SpoilageRiskResponse,
+    summary="Classify spoilage risk for the active batch",
+)
+async def active_spoilage_risk(
+    service: SpoilageRiskService = Depends(get_spoilage_risk_service),
+):
+    active, sensor = await _require_active_and_sensors()
+
+    initial_weight = float(active["initial_weight_kg"])
+    current_weight = _clamp(float(sensor.get("weight") or 0.0), 0.0, initial_weight)
+    weight_lost = max(0.0, initial_weight - current_weight)
+    weight_loss_pct = (weight_lost / initial_weight * 100.0) if initial_weight > 0 else 0.0
+    elapsed = active_batch_store.elapsed_drying_hours(active)
+
+    try:
+        req = SpoilageRiskRequest(
+            temperature_c=_clamp(float(sensor.get("temperature") or 0.0), -10, 120),
+            humidity_percent=_clamp(float(sensor.get("humidity") or 0.0), 0, 100),
+            elapsed_drying_time_hours=_clamp(elapsed, 0, 240),
+            weight_loss_percentage=_clamp(weight_loss_pct, 0, 100),
+            # Milan's `gas` field is the raw MQ-136 reading.
+            mq136_value=_clamp(float(sensor.get("gas") or 0.0), 0, 4096),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid derived inputs: {exc}")
+
+    smell_level, risk, model_used = service.predict(req)
+    created_at = datetime.now(timezone.utc)
+
+    await _persist(
+        build_prediction_record(
+            batch_id=active["batch_id"],
+            prediction_type="spoilage_risk",
+            inputs={**req.model_dump(), "source": "integrated", "sensor": sensor},
+            smell_level=smell_level,
+            spoilage_risk=risk,
+            model_used=model_used,
+        )
+    )
+
+    return SpoilageRiskResponse(
+        batch_id=active["batch_id"],
+        smell_level=smell_level,
+        spoilage_risk=risk,
+        model_used=model_used,
+        created_at=created_at,
+        factors=_spoilage_factors(req, smell_level),
+    )
