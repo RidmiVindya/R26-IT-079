@@ -15,7 +15,7 @@ MAIL_SERVER = os.getenv("MAIL_SERVER")
 MAIL_PORT = int(os.getenv("MAIL_PORT", 587))
 
 
-def send_email(receiver_email: str, subject: str, body: str, html_body: str | None = None):
+
     try:
         if not all([MAIL_EMAIL, MAIL_PASSWORD, MAIL_SERVER, MAIL_PORT]):
             raise ValueError("Mail configuration is incomplete.")
@@ -27,17 +27,7 @@ def send_email(receiver_email: str, subject: str, body: str, html_body: str | No
 
         message.attach(MIMEText(body, "plain"))
 
-        if html_body:
-            message.attach(MIMEText(html_body, "html"))
 
-        context = ssl.create_default_context()
-
-        with smtplib.SMTP(MAIL_SERVER, MAIL_PORT, timeout=30) as server:
-            server.ehlo()
-            server.starttls(context=context)
-            server.ehlo()
-            server.login(MAIL_EMAIL, MAIL_PASSWORD)
-            server.sendmail(MAIL_EMAIL, receiver_email, message.as_string())
 
         return True
 

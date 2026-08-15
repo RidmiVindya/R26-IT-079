@@ -14,6 +14,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.config import settings
 from app.database import close_mongo_connection, connect_to_mongo
 from app.routes.prediction_routes import router as prediction_router
+from app.routes.drying_integration_routes import router as drying_integration_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -104,6 +105,7 @@ async def health():
 
 
 app.include_router(prediction_router)
+app.include_router(drying_integration_router)
 
 
 if __name__ == "__main__":

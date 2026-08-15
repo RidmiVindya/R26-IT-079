@@ -20,3 +20,15 @@ app.include_router(auth_router)
 @app.get("/")
 def root():
     return {"message": "Authentication API Running"}
+
+
+if __name__ == "__main__":
+    import os
+    import uvicorn
+
+    # Dedicated auth port so it doesn't clash with batch (8000), time/spoilage
+    # (8001) or IoT (8002).
+    port = int(os.getenv("PORT", 8003))
+    host = os.getenv("HOST", "0.0.0.0")
+
+    uvicorn.run("app.main:app", host=host, port=port, reload=True)

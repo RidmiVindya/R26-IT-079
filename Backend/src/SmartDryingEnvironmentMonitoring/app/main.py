@@ -56,3 +56,4 @@ def health_check():
         "status": "healthy" if is_arduino_connected() else "degraded",
         "serial_connected": is_arduino_connected(),
     }
+

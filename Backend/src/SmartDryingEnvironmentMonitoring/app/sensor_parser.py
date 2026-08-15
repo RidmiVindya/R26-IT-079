@@ -44,36 +44,4 @@ def parse_sensor_lines(lines: list[str]) -> dict:
     }
 
     for line in lines:
-        try:
-            if "SHT Temp:" in line:
-                data["temperature"] = _number_after_colon(line, "C")
-            elif "Humidity:" in line:
-                data["humidity"] = _number_after_colon(line, "%")
-            elif "DS Temp:" in line:
-                data["ds_temperature"] = _number_after_colon(line, "C")
-            elif "Gas:" in line:
-                data["gas"] = int(line.split(":", 1)[1].strip())
-            elif "Load Cell Raw:" in line:
-                raw = int(line.split(":", 1)[1].strip())
-                data["raw_weight"] = raw
-                data["weight"] = raw_to_kg(raw)
-            elif "Heater/Dry Air:" in line:
-                data["heater"] = line.split(":", 1)[1].strip().upper() == "ON"
-            elif "Light:" in line:
-                data["light"] = line.split(":", 1)[1].strip().upper() == "ON"
-            elif "Fan:" in line:
-                data["fan"] = line.split(":", 1)[1].strip().upper() == "ON"
-        except (IndexError, TypeError, ValueError) as exc:
-            data["sensor_errors"].append({"line": line, "error": str(exc)})
 
-    if data["temperature"] is not None and not math.isfinite(data["temperature"]):
-        data["temperature"] = None
-        data["sensor_errors"].append({"field": "temperature", "error": "not finite"})
-    if data["humidity"] is not None and not 0 <= data["humidity"] <= 100:
-        data["humidity"] = None
-        data["sensor_errors"].append({"field": "humidity", "error": "outside 0..100"})
-    return data
-
-
-def get_live_sensor_data() -> dict:
-    return parse_sensor_lines(read_sensor_block())
