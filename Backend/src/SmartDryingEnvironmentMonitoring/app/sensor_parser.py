@@ -1,89 +1,47 @@
+import math
+import os
+from datetime import datetime, timezone
+
 from app.serial_reader import read_sensor_block
 
-# ============================
-# HX711 Calibration
-# ============================
-
-RAW_ZERO = 78959          # Empty tray value
-COUNTS_PER_KG = 194650.0  # Change after calibration
+# HX711 calibration values must be calibrated for the installed load cell.
+RAW_ZERO = int(os.getenv("HX711_RAW_ZERO", "78959"))
+COUNTS_PER_KG = float(os.getenv("HX711_COUNTS_PER_KG", "194650.0"))
+DEVICE_ID = os.getenv("DEVICE_ID", "ARDUINO-NANO-001")
 
 
-def raw_to_kg(raw):
-    """
-    Convert HX711 raw value to kilograms.
-    """
-
-    if raw is None:
-        return 0.0
-
+def raw_to_kg(raw: int | None) -> float | None:
+    """Convert a validated HX711 raw value to kilograms; missing stays missing."""
+    if raw is None or COUNTS_PER_KG <= 0:
+        return None
     kg = (raw - RAW_ZERO) / COUNTS_PER_KG
-
-    if kg < 0:
-        kg = 0
-
-    return round(kg, 2)
+    if not math.isfinite(kg) or kg < 0:
+        return None
+    return round(kg, 3)
 
 
-def get_live_sensor_data():
+def _number_after_colon(line: str, suffix: str = "") -> float:
+    value = line.split(":", 1)[1].replace(suffix, "").strip()
+    return float(value)
 
-    lines = read_sensor_block()
 
+def parse_sensor_lines(lines: list[str]) -> dict:
+    """Parse one complete Arduino sensor block without turning malformed input into data."""
     data = {
+        "device_id": DEVICE_ID,
+        "online": bool(lines),
+        "timestamp": datetime.now(timezone.utc),
         "temperature": None,
         "humidity": None,
         "ds_temperature": None,
         "gas": None,
-
-        # store both
         "raw_weight": None,
-        "weight": 0.0,
-
-        "heater": False,
-        "light": False,
-        "fan": False
+        "weight": None,
+        "heater": None,
+        "light": None,
+        "fan": None,
+        "sensor_errors": [],
     }
 
     for line in lines:
 
-        if "SHT Temp:" in line:
-            data["temperature"] = float(
-                line.split(":")[1].replace("C", "").strip()
-            )
-
-        elif "Humidity:" in line:
-            data["humidity"] = float(
-                line.split(":")[1].replace("%", "").strip()
-            )
-
-        elif "DS Temp:" in line:
-            data["ds_temperature"] = float(
-                line.split(":")[1].replace("C", "").strip()
-            )
-
-        elif "Gas:" in line:
-            data["gas"] = int(
-                line.split(":")[1].strip()
-            )
-
-        elif "Load Cell Raw:" in line:
-
-            raw = int(
-                line.split(":")[1].strip()
-            )
-
-            data["raw_weight"] = raw
-            data["weight"] = raw_to_kg(raw)
-
-        elif "Heater/Dry Air:" in line:
-            state = line.split(":")[1].strip()
-            data["heater"] = state == "ON"
-
-        elif "Light:" in line:
-            state = line.split(":")[1].strip()
-            data["light"] = state == "ON"
-
-        elif "Fan:" in line:
-            state = line.split(":")[1].strip()
-            data["fan"] = state == "ON"
-
-    return data
