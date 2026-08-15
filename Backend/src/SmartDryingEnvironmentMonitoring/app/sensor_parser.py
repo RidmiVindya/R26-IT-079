@@ -44,4 +44,46 @@ def parse_sensor_lines(lines: list[str]) -> dict:
     }
 
     for line in lines:
+        line = line.strip()
+        try:
+            if line.startswith("SHT Temp:"):
+                data["temperature"] = _number_after_colon(line, "C")
+            elif line.startswith("Humidity:"):
+                data["humidity"] = _number_after_colon(line, "%")
+            elif line.startswith("DS Temp:"):
+                data["ds_temperature"] = _number_after_colon(line, "C")
+            elif line.startswith("Gas:"):
+                data["gas"] = int(_number_after_colon(line))
+            elif line.startswith("Load Cell Raw:"):
+                data["raw_weight"] = int(_number_after_colon(line))
+            elif line.startswith("Heater/Dry Air:"):
+                data["heater"] = line.rsplit(":", 1)[1].strip().upper() == "ON"
+            elif line.startswith("Light:"):
+                data["light"] = line.rsplit(":", 1)[1].strip().upper() == "ON"
+            elif line.startswith("Fan:"):
+                data["fan"] = line.rsplit(":", 1)[1].strip().upper() == "ON"
+        except (IndexError, ValueError):
+            data["sensor_errors"].append(f"Invalid sensor line: {line}")
+
+    data["weight"] = raw_to_kg(data["raw_weight"])
+    required_fields = (
+        "temperature",
+        "humidity",
+        "ds_temperature",
+        "gas",
+        "raw_weight",
+        "weight",
+        "heater",
+        "light",
+        "fan",
+    )
+    for field in required_fields:
+        if data[field] is None:
+            data["sensor_errors"].append(f"Missing sensor value: {field}")
+
+    return data
+
+
+def get_live_sensor_data() -> dict:
+    return parse_sensor_lines(read_sensor_block())
 
