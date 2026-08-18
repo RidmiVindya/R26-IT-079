@@ -56,6 +56,11 @@ async def get_monitoring(batch_id: str):
     return await batch_controller.salting_monitor(batch_id)
 
 
+@router.post("/{batch_id}/complete-salting")
+async def complete_salting(batch_id: str):
+    return await batch_controller.complete_salting(batch_id)
+
+
 @router.post("/{batch_id}/send-waste-notification")
 async def send_waste_notification(batch_id: str):
     return await batch_controller.send_waste_notification(batch_id)

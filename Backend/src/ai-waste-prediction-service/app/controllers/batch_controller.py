@@ -374,6 +374,39 @@ async def salting_monitor(batch_id: str):
         "remainingHours": round(remaining, 2),
     }
 
+async def complete_salting(batch_id: str):
+
+    batch = batches_collection.find_one({"batchId": batch_id})
+
+    if not batch:
+        raise HTTPException(
+            status_code=404,
+            detail="Batch not found"
+        )
+
+    if batch.get("saltingStartTime") is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Salting has not started."
+        )
+
+    batches_collection.update_one(
+        {"batchId": batch_id},
+        {
+            "$set": {
+                "saltingStatus": "Completed",
+                "updatedAt": datetime.now(),
+            }
+        }
+    )
+
+    updated_batch = batches_collection.find_one({"batchId": batch_id})
+
+    return {
+        "message": "Salting marked as completed",
+        "batch": serialize_doc(updated_batch),
+    }
+
 async def get_traceability_dashboard():
 
     batches = list(

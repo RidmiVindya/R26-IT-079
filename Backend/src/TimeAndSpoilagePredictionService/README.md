@@ -82,7 +82,7 @@ pip install -r requirements.txt
 Edit `.env` if MongoDB or ports differ from the defaults:
 
 ```
-APP_PORT=8001
+APP_PORT=8003
 MONGO_URI=mongodb://localhost:27017
 MONGO_DB_NAME=fish_drying_db
 ```
@@ -103,10 +103,20 @@ automatically uses its rule-based fallback predictors.
 ### 5. Run the service
 
 ```powershell
-uvicorn app.main:app --reload --port 8001
+python run.py
 ```
 
-Or just:
+The same command using the local virtual environment without activating it is:
+
+```powershell
+.\.venv\Scripts\python.exe run.py
+```
+
+If dependencies have not been installed in this service environment yet, run:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
 
 ```powershell
 python -m app.main
@@ -114,8 +124,8 @@ python -m app.main
 
 API docs:
 
-- Swagger UI: <http://localhost:8001/docs>
-- ReDoc: <http://localhost:8001/redoc>
+- Swagger UI: <http://localhost:8003/docs>
+- ReDoc: <http://localhost:8003/redoc>
 
 ---
 
