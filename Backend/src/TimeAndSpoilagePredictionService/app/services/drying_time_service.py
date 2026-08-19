@@ -15,6 +15,7 @@ import numpy as np
 
 from app.config import settings
 from app.schemas.prediction_schema import DryingTimeRequest
+from app.services.initial_prediction_service import _resolve_fish_type
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +81,7 @@ class DryingTimeService:
         return self._rule_based_predict(payload), "RuleBasedFallback"
 
     def _build_features(self, p: DryingTimeRequest) -> np.ndarray:
-        fish_code = FISH_TYPE_ENCODING.get(p.fish_type, 0)
+        fish_code = FISH_TYPE_ENCODING.get(_resolve_fish_type(p.fish_type), 0)
         return np.array(
             [
                 [

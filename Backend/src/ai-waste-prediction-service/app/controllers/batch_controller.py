@@ -311,16 +311,20 @@ async def salting_monitor(batch_id: str):
             detail="Salting has not started."
         )
 
-    duration = batch.get("recommendedDuration", 12)
+    duration = batch.get("recommendedDuration") or 12
 
     elapsed_hours = (
         datetime.now() - start_time
     ).total_seconds() / 3600
 
+    already_completed = str(batch.get("saltingStatus", "")).strip().lower() == "completed"
+
     progress = min(
         (elapsed_hours / duration) * 100,
         100,
     )
+    if already_completed:
+        progress = 100
 
     initial = batch.get("initialSaltedWeight", 0)
 
@@ -342,10 +346,14 @@ async def salting_monitor(batch_id: str):
         duration - elapsed_hours,
         0,
     )
+    if already_completed:
+        remaining = 0
 
+    # Once a batch has been marked Completed (by elapsed time or manually),
+    # never let a status recompute here revert it back to In Progress.
     status = (
         "Completed"
-        if progress >= 100
+        if already_completed or progress >= 100
         else "In Progress"
     )
 

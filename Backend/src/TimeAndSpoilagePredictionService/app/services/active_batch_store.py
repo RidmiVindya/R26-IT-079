@@ -38,14 +38,25 @@ async def set_active_batch(
     fish_type: str,
     initial_weight_kg: float,
     raw_batch: dict[str, Any],
+    initial_temperature_c: Optional[float] = None,
+    initial_total_hours: Optional[float] = None,
 ) -> dict[str, Any]:
-    """Mark a batch as the active drying batch (replaces any previous one)."""
+    """Mark a batch as the active drying batch (replaces any previous one).
+
+    `initial_temperature_c` / `initial_total_hours` are the recommended
+    temperature and total drying time from the pre-drying prediction
+    (POST /api/predict/initial), if the caller ran that step first. They seed
+    the countdown shown before live sensor data can produce a meaningful
+    re-estimate (see `active/drying-time`).
+    """
     record = {
         "_id": _ACTIVE_DOC_ID,
         "batch_id": batch_id,
         "fish_type": fish_type,
         "initial_weight_kg": initial_weight_kg,
         "drying_started_at": datetime.now(timezone.utc),
+        "initial_temperature_c": initial_temperature_c,
+        "initial_total_hours": initial_total_hours,
         # Keep a snapshot of Jayani's batch for reference / debugging.
         "batch_snapshot": raw_batch,
     }

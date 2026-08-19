@@ -40,6 +40,20 @@ FISH_TYPE_ENCODING = {
     "mackerel": 11,
 }
 
+# Fish types accepted by the API that have no dedicated training data yet.
+# Predictions for these fall back to the closest trained species until
+# real data is collected and the model is retrained.
+# "thora" (Seer/Spanish mackerel) is a distinct species from "thalapath"
+# (Sailfish) but shares similar size/texture, so it borrows that model.
+FISH_TYPE_ALIASES = {
+    "thora": "thalapath",
+}
+
+
+def _resolve_fish_type(fish_type: str) -> str:
+    normalized = fish_type.strip().lower()
+    return FISH_TYPE_ALIASES.get(normalized, normalized)
+
 
 class InitialPredictionService:
     def __init__(self) -> None:
@@ -93,7 +107,7 @@ class InitialPredictionService:
         return temperature, hours, "RuleBasedFallback"
 
     def _build_features(self, p: InitialPredictionRequest) -> np.ndarray:
-        fish_code = FISH_TYPE_ENCODING.get(p.fish_type, 0)
+        fish_code = FISH_TYPE_ENCODING.get(_resolve_fish_type(p.fish_type), 0)
         return np.array(
             [[fish_code, p.initial_weight_kg, p.humidity_percent, p.mq136_value]],
             dtype=float,
@@ -102,7 +116,7 @@ class InitialPredictionService:
     @staticmethod
     def _rule_based_predict(p: InitialPredictionRequest) -> Tuple[float, float]:
         """Heuristic estimate used only if no trained model is available."""
-        normalized = p.fish_type.strip().lower()
+        normalized = _resolve_fish_type(p.fish_type)
 
         if normalized in ("salaya", "sprats", "kumbalawa"):
             temperature = 33.0 + (p.initial_weight_kg / 20.0)

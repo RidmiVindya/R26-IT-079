@@ -38,6 +38,11 @@ class Settings(BaseSettings):
         "thalapath",
         "tuna",
         "mackerel",
+        # Thora is a distinct species from Thalapath, but no Thora-specific
+        # training data exists yet. Accepted here and mapped to the
+        # Thalapath model/encoding as a stand-in until real Thora data is
+        # collected and the model is retrained (see FISH_TYPE_ALIASES).
+        "thora",
     )
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
