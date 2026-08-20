@@ -112,11 +112,11 @@ async def create_batch(data: dict):
     batch_id = data.get("batchId") or f"BATCH-{int(datetime.now().timestamp() * 1000)}"
 
     waste_ratio = get_waste_ratio(fish_type)
-    predicted_waste = round(raw_weight_val * waste_ratio, 2)
-    cleaned_weight = round(raw_weight_val - predicted_waste, 2)
+    predicted_waste = round(raw_weight_val * waste_ratio, 3)
+    cleaned_weight = round(raw_weight_val - predicted_waste, 3)
 
     salt_ratio = get_salt_ratio(fish_type)
-    salt_amount = round(cleaned_weight * salt_ratio, 2)
+    salt_amount = round(cleaned_weight * salt_ratio, 3)
     duration = calculate_recommended_duration(cleaned_weight, fish_type)
 
     batch = {
@@ -206,11 +206,11 @@ async def update_batch(batch_id: str, data: dict):
         raw_w = float(update_data.get("rawWeight", batch.get("rawWeight", 0)))
         if raw_w > 0:
             w_ratio = get_waste_ratio(fish_type)
-            p_waste = round(raw_w * w_ratio, 2)
-            c_weight = round(raw_w - p_waste, 2)
+            p_waste = round(raw_w * w_ratio, 3)
+            c_weight = round(raw_w - p_waste, 3)
 
             s_ratio = get_salt_ratio(fish_type)
-            s_amount = round(c_weight * s_ratio, 2)
+            s_amount = round(c_weight * s_ratio, 3)
             dur = calculate_recommended_duration(c_weight, fish_type)
 
             update_data["predictedWaste"] = p_waste
@@ -256,8 +256,8 @@ async def predict_waste(batch_id: str):
     fish_type = batch.get("fishType", "Mackerel")
 
     ratio = get_waste_ratio(fish_type)
-    predicted_waste = round(raw_weight * ratio, 2)
-    cleaned_weight = round(raw_weight - predicted_waste, 2)
+    predicted_waste = round(raw_weight * ratio, 3)
+    cleaned_weight = round(raw_weight - predicted_waste, 3)
 
     batches_collection.update_one(
         {"batchId": batch_id},
@@ -297,13 +297,13 @@ async def predict_salt(batch_id: str, data: dict = None):
         raw_weight = float(batch.get("rawWeight", 0))
         if raw_weight > 0:
             w_ratio = get_waste_ratio(fish_type)
-            predicted_waste = round(raw_weight * w_ratio, 2)
-            cleaned_weight = round(raw_weight - predicted_waste, 2)
+            predicted_waste = round(raw_weight * w_ratio, 3)
+            cleaned_weight = round(raw_weight - predicted_waste, 3)
         else:
             raise HTTPException(status_code=400, detail="Please set a valid raw fish weight first")
 
     s_ratio = get_salt_ratio(fish_type)
-    salt_amount = round(cleaned_weight * s_ratio, 2)
+    salt_amount = round(cleaned_weight * s_ratio, 3)
 
     recommended_duration = calculate_recommended_duration(cleaned_weight, fish_type)
 

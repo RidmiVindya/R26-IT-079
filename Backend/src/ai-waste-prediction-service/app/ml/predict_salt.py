@@ -29,7 +29,7 @@ input_df = input_df[X.columns]
 predicted_salt = model.predict(input_df)[0]
 
 # Species-specific & weight-adjusted recommended salting duration (in hours)
-if fish_type in ["Thalapath", "Thora", "Mora"]:
+if fish_type in ["Thalapath", "Thora", "Mora","Paraw","Balaya"]:
     if cleaned_weight <= 0.5:
         recommended_duration = 8
     elif cleaned_weight <= 1.5:
@@ -38,7 +38,7 @@ if fish_type in ["Thalapath", "Thora", "Mora"]:
         recommended_duration = 18
     else:
         recommended_duration = 24
-elif fish_type in ["Salaya", "Kumbalawa", "Sprats", "Sardine", "Anchovy"]:
+elif fish_type in ["Salaya", "Kumbalawa", "Kelawalla", "Linna", "Hurulla"]:
     if cleaned_weight <= 0.5:
         recommended_duration = 4
     elif cleaned_weight <= 1.5:

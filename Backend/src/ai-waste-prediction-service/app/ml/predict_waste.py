@@ -40,5 +40,5 @@ predicted_waste = model.predict(input_df)[0]
 
 # Return JSON
 print(json.dumps({
-    "predictedWaste": round(float(predicted_waste), 2)
+    "predictedWaste": round(float(predicted_waste), 3)
 }))
