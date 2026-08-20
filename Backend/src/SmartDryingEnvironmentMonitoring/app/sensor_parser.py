@@ -5,16 +5,31 @@ from datetime import datetime, timezone
 from app.serial_reader import read_sensor_block
 
 # HX711 calibration values must be calibrated for the installed load cell.
+# Calibration slope for the installed HX711/load-cell pair. The empty tray is
+# handled separately by the runtime tare value below.
 RAW_ZERO = int(os.getenv("HX711_RAW_ZERO", "78959"))
-COUNTS_PER_KG = float(os.getenv("HX711_COUNTS_PER_KG", "194650.0"))
+COUNTS_PER_KG = float(os.getenv("HX711_COUNTS_PER_KG", "381866.0"))
 DEVICE_ID = os.getenv("DEVICE_ID", "ARDUINO-NANO-001")
+
+_runtime_raw_zero: int | None = None
+
+
+def get_raw_zero() -> int:
+    """Return the tray-aware runtime zero, or the configured startup zero."""
+    return RAW_ZERO if _runtime_raw_zero is None else _runtime_raw_zero
+
+
+def set_raw_zero(raw: int) -> None:
+    """Use a fresh empty-tray sample as zero until the service restarts."""
+    global _runtime_raw_zero
+    _runtime_raw_zero = int(raw)
 
 
 def raw_to_kg(raw: int | None) -> float | None:
     """Convert a validated HX711 raw value to kilograms; missing stays missing."""
     if raw is None or COUNTS_PER_KG <= 0:
         return None
-    kg = (raw - RAW_ZERO) / COUNTS_PER_KG
+    kg = (raw - get_raw_zero()) / COUNTS_PER_KG
     if not math.isfinite(kg) or kg < 0:
         return None
     return round(kg, 3)
