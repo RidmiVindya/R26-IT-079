@@ -35,7 +35,7 @@ async def create_batch(data: dict):
     if not fish_type or raw_weight is None:
         raise HTTPException(status_code=400, detail="fishType and rawWeight are required")
 
-    batch_id = f"BATCH-{int(datetime.now().timestamp() * 1000)}"
+    batch_id = data.get("batchId") or f"BATCH-{int(datetime.now().timestamp() * 1000)}"
 
     batch = {
         "batchId": batch_id,
@@ -392,8 +392,8 @@ async def get_traceability_dashboard():
 
     for batch in batches:
 
-        predicted = float(batch.get("predictedWaste", 0))
-        raw = float(batch.get("rawWeight", 0))
+        predicted = float(batch.get("predictedWaste") or 0)
+        raw = float(batch.get("rawWeight") or 0)
 
         total_waste += predicted
 
@@ -401,12 +401,12 @@ async def get_traceability_dashboard():
             total_percentage += (predicted / raw) * 100
 
         # Read the correct database field
-        status = str(batch.get("saltingStatus", "")).strip().lower()
+        status = str(batch.get("saltingStatus", batch.get("status", ""))).strip().lower()
 
         if status == "completed":
             completed_batches += 1
 
-        elif status == "in progress":
+        elif status in ["in progress", "in_progress"]:
             in_progress_batches += 1
 
         recent_batches.append({

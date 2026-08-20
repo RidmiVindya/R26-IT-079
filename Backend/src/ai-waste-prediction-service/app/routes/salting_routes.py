@@ -125,6 +125,7 @@ async def complete_salting_manually(batch_id: str):
     }
 
 
+@router.get("")
 @router.get("/")
 async def get_all_salting_records():
     records = []
