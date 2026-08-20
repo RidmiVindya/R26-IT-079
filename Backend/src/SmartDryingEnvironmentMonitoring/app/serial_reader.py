@@ -39,10 +39,10 @@ def _mock_sensor_block():
     ds_temp = 33.0 + (_mock_tick % 5)       # 33-37 C
     gas = 250 + (_mock_tick % 300)          # 250-549 (MQ-136 raw)
     # Weight decreases over time as fish dries. HX711 raw is calibrated by
-    # raw_to_kg() as (raw - 78959) / 389300, so pick raw values that map to a
+    # raw_to_kg() as (raw - 78959) / 381866, so pick raw values that map to a
     # realistic ~8kg batch slowly losing mass toward ~3kg.
     RAW_ZERO = 78959
-    COUNTS_PER_KG = 389300.0
+    COUNTS_PER_KG = 381866.0
     kg = max(3.0, 8.0 - _mock_tick * 0.05)  # 8.0kg drifting down, floor 3.0kg
     raw_weight = int(RAW_ZERO + kg * COUNTS_PER_KG)
 

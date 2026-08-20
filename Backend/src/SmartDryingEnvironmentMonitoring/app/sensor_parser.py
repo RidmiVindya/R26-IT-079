@@ -5,11 +5,10 @@ from datetime import datetime, timezone
 from app.serial_reader import read_sensor_block
 
 # HX711 calibration values must be calibrated for the installed load cell.
-# A 500 g reference produced 1.000 kg with the previous 194650 default, so the
-# corrected slope is twice that value. Both settings remain environment
-# overrides because every HX711/load-cell pair needs its own final calibration.
+# Calibration slope for the installed HX711/load-cell pair. The empty tray is
+# handled separately by the runtime tare value below.
 RAW_ZERO = int(os.getenv("HX711_RAW_ZERO", "78959"))
-COUNTS_PER_KG = float(os.getenv("HX711_COUNTS_PER_KG", "389300.0"))
+COUNTS_PER_KG = float(os.getenv("HX711_COUNTS_PER_KG", "381866.0"))
 DEVICE_ID = os.getenv("DEVICE_ID", "ARDUINO-NANO-001")
 
 _runtime_raw_zero: int | None = None
