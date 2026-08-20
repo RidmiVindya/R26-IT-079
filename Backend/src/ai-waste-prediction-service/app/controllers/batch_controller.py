@@ -63,7 +63,7 @@ def calculate_recommended_duration(cleaned_weight: float, fish_type: str = "Mack
     cleaned_weight = float(cleaned_weight)
     normalized = str(fish_type).strip().title() if fish_type else ""
 
-    if normalized in ["Thalapath", "Thora", "Mora"]:
+    if normalized in ["Thalapath", "Thora", "Mora", "Paraw", "Balaya"]:
         if cleaned_weight <= 0.5:
             return 8
         elif cleaned_weight <= 1.5:
@@ -72,7 +72,7 @@ def calculate_recommended_duration(cleaned_weight: float, fish_type: str = "Mack
             return 18
         else:
             return 24
-    elif normalized in ["Salaya", "Kumbalawa", "Sprats", "Sardine", "Anchovy"]:
+    elif normalized in ["Salaya", "Kumbalawa", "Kelawalla", "Linna", "Hurulla", "Sprats", "Sardine", "Anchovy"]:
         if cleaned_weight <= 0.5:
             return 4
         elif cleaned_weight <= 1.5:
