@@ -3,3 +3,4 @@ uvicorn
 pyserial
 python-dotenv
 pymongo
+pytest

@@ -12,6 +12,23 @@ SpoilageRiskLiteral = Literal["Low", "Medium", "High"]
 
 
 # ---------------------------------------------------------------------------
+# Explanation factor — one IoT reading / derived metric that contributed to a
+# prediction, with its current value, the expected/normal range, and how it
+# affects the outcome. Used by the detail screens to explain "why".
+# ---------------------------------------------------------------------------
+class Factor(BaseModel):
+    key: str = Field(..., description="Machine key, e.g. 'gas', 'humidity'")
+    label: str = Field(..., description="Human label, e.g. 'Gas (MQ-136)'")
+    value: float = Field(..., description="Current reading/derived value")
+    unit: str = Field("", description="Unit, e.g. '%', 'C', 'kg', 'ppm'")
+    normal_range: str = Field(..., description="Expected/normal range, e.g. '<= 300'")
+    status: Literal["good", "elevated", "high", "low"] = Field(
+        ..., description="How this reading sits vs normal"
+    )
+    effect: str = Field(..., description="Plain-language effect on the result")
+
+
+# ---------------------------------------------------------------------------
 # Drying time prediction
 # ---------------------------------------------------------------------------
 class DryingTimeRequest(BaseModel):
@@ -55,6 +72,7 @@ class DryingTimeResponse(BaseModel):
     predicted_remaining_drying_time_hours: float
     model_used: str
     created_at: datetime
+    factors: list[Factor] = Field(default_factory=list, description="Readings that drive the estimate")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -97,6 +115,7 @@ class SpoilageRiskResponse(BaseModel):
     spoilage_risk: SpoilageRiskLiteral
     model_used: str
     created_at: datetime
+    factors: list[Factor] = Field(default_factory=list, description="Readings that drive the risk")
 
     model_config = ConfigDict(
         json_schema_extra={
