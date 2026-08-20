@@ -8,7 +8,7 @@ from app.settings import SENSOR_READ_TIMEOUT_SECONDS
 
 load_dotenv()
 
-SERIAL_PORT = os.getenv("SERIAL_PORT", "COM4")
+SERIAL_PORT = os.getenv("SERIAL_PORT", "COM3")
 BAUD_RATE = int(os.getenv("BAUD_RATE", 9600))
 
 # Opt-in software simulation for running without physical Arduino hardware.
@@ -119,6 +119,7 @@ def read_sensor_block(timeout_seconds: float = SENSOR_READ_TIMEOUT_SECONDS):
 
     block = []
     started = False
+    deadline = time.monotonic() + timeout_seconds
 
     with serial_lock:
         if arduino is None or not arduino.is_open:
