@@ -120,13 +120,16 @@ DEVICE_ID=ARDUINO-NANO-001
 MONGO_URI=mongodb://localhost:27017
 MONGO_DB_NAME=fish_drying_db
 HX711_RAW_ZERO=78959
-HX711_COUNTS_PER_KG=194650.0
+HX711_COUNTS_PER_KG=381866.0
 TEMPERATURE_TOLERANCE_C=2
 HUMIDITY_TOLERANCE_PERCENT=3
 SENSOR_READ_TIMEOUT_SECONDS=3
 SENSOR_SAVE_INTERVAL_SECONDS=10
 ```
 
-`HX711_*` values must be calibrated against your actual scale. The service uses
+`HX711_*` values must be calibrated against your actual scale. Install the empty
+fish tray and call `POST /api/iot/tare` before adding fish; the service captures
+that post-tare raw reading as its runtime zero and verifies a `0.000 kg` result.
+The service uses
 an in-memory fallback if MongoDB is unavailable; MongoDB is required for session
 recovery and durable integration testing.

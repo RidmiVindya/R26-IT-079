@@ -4,7 +4,10 @@ from app.config.db import db
 router = APIRouter(tags=["Dashboard"])
 
 
+@router.get("")
+@router.get("/")
 @router.get("/stats")
+@router.get("/stats/")
 async def get_dashboard_stats():
     total_batches = db.batches.count_documents({})
 

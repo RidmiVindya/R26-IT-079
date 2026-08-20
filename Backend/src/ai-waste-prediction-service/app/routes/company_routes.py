@@ -5,6 +5,7 @@ from bson import ObjectId
 
 router = APIRouter(tags=["Companies"])
 
+@router.post("")
 @router.post("/")
 async def create_company(company: Company):
     result = db.companies.insert_one(company.dict())
@@ -14,6 +15,7 @@ async def create_company(company: Company):
         "id": str(result.inserted_id)
     }
 
+@router.get("")
 @router.get("/")
 async def get_companies():
     companies = []
