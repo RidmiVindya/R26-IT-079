@@ -11,7 +11,7 @@ from app.models import (
     StartDryingRequest,
     TareRequest,
 )
-from app.sensor_parser import get_live_sensor_data
+from app.sensor_parser import get_live_sensor_data, raw_to_kg, set_raw_zero
 from app.serial_reader import read_sensor_block
 
 router = APIRouter()
@@ -119,7 +119,23 @@ def set_manual_actuators(batch_id: str, request: ManualActuatorRequest):
 @router.post("/iot/tare")
 def tare_scale(request: TareRequest):
     try:
-        return controller.tare(request.batch_id)
+        result = controller.tare(request.batch_id)
+        # Capture the empty tray after the firmware tare command. This works
+        # whether firmware reports absolute HX711 counts or tare-relative
+        # counts, and keeps the backend conversion aligned with the device.
+        reading = get_live_sensor_data()
+        raw = reading.get("raw_weight")
+        if not isinstance(raw, int):
+            raise ControllerError(
+                "Tare command was sent, but no valid load-cell reading was received"
+            )
+        set_raw_zero(raw)
+        result.update({
+            "raw_zero": raw,
+            "weight": raw_to_kg(raw),
+            "verified": True,
+        })
+        return result
     except ControllerError as exc:
         raise _controller_http_error(exc)
 
