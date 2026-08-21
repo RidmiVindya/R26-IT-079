@@ -9,7 +9,7 @@ raw_weight = float(sys.argv[2])
 
 # Load dataset
 import os
-csv_path = "app/ml/dataset.csv" if os.path.exists("app/ml/dataset.csv") else ("ml/dataset.csv" if os.path.exists("ml/dataset.csv") else "dataset.csv")
+csv_path = "app/ml/dataset.csv"
 df = pd.read_csv(csv_path)
 
 # One-hot encode fish_type

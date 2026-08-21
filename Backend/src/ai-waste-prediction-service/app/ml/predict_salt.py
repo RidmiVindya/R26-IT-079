@@ -7,7 +7,7 @@ fish_type = sys.argv[1]
 cleaned_weight = float(sys.argv[2])
 
 import os
-csv_path = "app/ml/salt_dataset.csv" if os.path.exists("app/ml/salt_dataset.csv") else ("ml/salt_dataset.csv" if os.path.exists("ml/salt_dataset.csv") else "salt_dataset.csv")
+csv_path = "app/ml/salt_dataset.csv"
 df = pd.read_csv(csv_path)
 df_encoded = pd.get_dummies(df, columns=["fish_type"])
 
