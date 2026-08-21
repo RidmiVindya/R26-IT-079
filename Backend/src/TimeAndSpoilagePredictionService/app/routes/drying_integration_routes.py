@@ -37,6 +37,7 @@ from app.services.batch_client import (
     normalize_fish_type,
 )
 from app.services.drying_time_service import DryingTimeService, get_drying_time_service
+from app.services.initial_prediction_service import InitialPredictionService
 from app.services.sensor_client import (
     SensorServiceUnavailableError,
     fetch_live_reading,
@@ -191,11 +192,47 @@ def _drying_time_factors(req: "DryingTimeRequest") -> list[Factor]:
 # ---------------------------------------------------------------------------
 # Start / inspect the active drying batch
 # ---------------------------------------------------------------------------
-@router.post("/start", summary="Start drying a batch (set it active)")
-async def start_drying(payload: dict = Body(..., example={"batchId": "BATCH-1700000000000"})):
+@router.post(
+    "/start",
+    summary="Start drying a batch (set it active)",
+)
+async def start_drying(
+    payload: dict = Body(
+        ...,
+        example={
+            "batchId": "BATCH-1700000000000",
+            "initialTemperatureC": 50.5,
+            "initialTotalHours": 22.25,
+        },
+    ),
+):
     batch_id = (payload or {}).get("batchId") or (payload or {}).get("batch_id")
     if not batch_id:
         raise HTTPException(status_code=400, detail="batchId is required")
+
+    # Optional: seeded from POST /api/predict/initial, run before drying starts.
+    # Re-clamp here as a second line of defence: these values arrive over the
+    # wire and may be stale or hand-supplied, and the oven acts on them.
+    initial_temperature_c = (payload or {}).get("initialTemperatureC")
+    initial_total_hours = (payload or {}).get("initialTotalHours")
+
+    if initial_temperature_c is not None or initial_total_hours is not None:
+        try:
+            clamped_temp, clamped_hours = InitialPredictionService.apply_safety_limits(
+                float(initial_temperature_c)
+                if initial_temperature_c is not None
+                else settings.MIN_DRYING_TEMPERATURE_C,
+                float(initial_total_hours) if initial_total_hours is not None else 0.0,
+            )
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=422,
+                detail="initialTemperatureC / initialTotalHours must be numeric",
+            )
+        if initial_temperature_c is not None:
+            initial_temperature_c = clamped_temp
+        if initial_total_hours is not None:
+            initial_total_hours = clamped_hours
 
     try:
         batch = await fetch_batch(str(batch_id))
@@ -231,6 +268,12 @@ async def start_drying(payload: dict = Body(..., example={"batchId": "BATCH-1700
         fish_type=fish_type,
         initial_weight_kg=initial_weight,
         raw_batch=batch,
+        initial_temperature_c=(
+            float(initial_temperature_c) if initial_temperature_c is not None else None
+        ),
+        initial_total_hours=(
+            float(initial_total_hours) if initial_total_hours is not None else None
+        ),
     )
 
     return {
@@ -239,6 +282,8 @@ async def start_drying(payload: dict = Body(..., example={"batchId": "BATCH-1700
         "fishType": record["fish_type"],
         "initialWeightKg": record["initial_weight_kg"],
         "dryingStartedAt": record["drying_started_at"],
+        "initialTemperatureC": record.get("initial_temperature_c"),
+        "initialTotalHours": record.get("initial_total_hours"),
     }
 
 
@@ -253,6 +298,8 @@ async def get_active():
         "initialWeightKg": active["initial_weight_kg"],
         "dryingStartedAt": active.get("drying_started_at"),
         "elapsedDryingHours": round(active_batch_store.elapsed_drying_hours(active), 2),
+        "initialTemperatureC": active.get("initial_temperature_c"),
+        "initialTotalHours": active.get("initial_total_hours"),
     }
 
 
@@ -269,18 +316,44 @@ async def stop_drying():
 # ---------------------------------------------------------------------------
 # Predictions for the active batch, using live sensor data
 # ---------------------------------------------------------------------------
-async def _require_active_and_sensors() -> tuple[dict[str, Any], dict[str, Any]]:
+async def _require_active_batch() -> dict[str, Any]:
     active = await active_batch_store.get_active_batch()
     if not active:
         raise HTTPException(
             status_code=404,
             detail="No active drying batch. Call POST /api/drying/start first.",
         )
+    return active
+
+
+async def _require_active_and_sensors() -> tuple[dict[str, Any], dict[str, Any]]:
+    active = await _require_active_batch()
     try:
         sensor = await fetch_live_reading()
     except SensorServiceUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     return active, sensor
+
+
+def _seeded_drying_time_response(active: dict[str, Any], elapsed: float) -> DryingTimeResponse:
+    """Fall back to the pre-drying estimate (minus elapsed time) when there is
+    no usable live weight reading yet — e.g. the IoT device is offline. A
+    missing weight reading must NOT be treated as "0 kg remaining"."""
+    total_hours = active.get("initial_total_hours")
+    if total_hours is None:
+        # No seeded estimate either (drying started without a prior
+        # /api/predict/initial call) — nothing sensible to show.
+        remaining = 0.0
+    else:
+        remaining = max(0.0, float(total_hours) - elapsed)
+
+    return DryingTimeResponse(
+        batch_id=active["batch_id"],
+        predicted_remaining_drying_time_hours=round(remaining, 2),
+        model_used="SeededEstimate" if total_hours is not None else "Unavailable",
+        created_at=datetime.now(timezone.utc),
+        factors=[],
+    )
 
 
 @router.get(
@@ -291,14 +364,23 @@ async def _require_active_and_sensors() -> tuple[dict[str, Any], dict[str, Any]]
 async def active_drying_time(
     service: DryingTimeService = Depends(get_drying_time_service),
 ):
-    active, sensor = await _require_active_and_sensors()
+    active = await _require_active_batch()
+    elapsed = active_batch_store.elapsed_drying_hours(active)
+
+    try:
+        sensor = await fetch_live_reading()
+    except SensorServiceUnavailableError:
+        return _seeded_drying_time_response(active, elapsed)
+
+    raw_weight = sensor.get("weight")
+    if raw_weight is None or sensor.get("online") is False:
+        # No usable weight reading (device offline / sensor not ready yet) —
+        # do NOT treat a missing reading as "current weight is 0 kg".
+        return _seeded_drying_time_response(active, elapsed)
 
     initial_weight = float(active["initial_weight_kg"])
-    current_weight = float(sensor.get("weight") or 0.0)
-    # Current weight can't exceed the starting weight (sensor noise / empty tray).
-    current_weight = _clamp(current_weight, 0.0, initial_weight)
+    current_weight = _clamp(float(raw_weight), 0.0, initial_weight)
 
-    elapsed = active_batch_store.elapsed_drying_hours(active)
     weight_lost = max(0.0, initial_weight - current_weight)
     # Guard against a near-zero elapsed time (e.g. predicting seconds after
     # drying starts) producing an absurd kg/hour rate. Require at least a small
@@ -355,6 +437,18 @@ async def active_spoilage_risk(
     service: SpoilageRiskService = Depends(get_spoilage_risk_service),
 ):
     active, sensor = await _require_active_and_sensors()
+
+    if sensor.get("weight") is None or sensor.get("online") is False:
+        # No usable reading yet — report unknown rather than fabricating a
+        # "Low risk" result from zeroed-out sensor values.
+        return SpoilageRiskResponse(
+            batch_id=active["batch_id"],
+            smell_level="Low",
+            spoilage_risk="Low",
+            model_used="Unavailable",
+            created_at=datetime.now(timezone.utc),
+            factors=[],
+        )
 
     initial_weight = float(active["initial_weight_kg"])
     current_weight = _clamp(float(sensor.get("weight") or 0.0), 0.0, initial_weight)

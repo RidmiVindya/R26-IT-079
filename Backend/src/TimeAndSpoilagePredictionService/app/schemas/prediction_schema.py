@@ -67,6 +67,59 @@ class DryingTimeRequest(BaseModel):
     )
 
 
+# ---------------------------------------------------------------------------
+# Initial prediction — temperature + total drying time, before drying starts
+# ---------------------------------------------------------------------------
+class InitialPredictionRequest(BaseModel):
+    fish_type: str = Field(..., description="Type of fish, e.g. salaya, sprats, mackerel")
+    initial_weight_kg: float = Field(..., gt=0, le=500, description="Batch weight in kg before drying starts")
+    humidity_percent: float = Field(..., ge=0, le=100, description="Ambient/chamber relative humidity percentage")
+    mq136_value: float = Field(0.0, ge=0, le=4096, description="Raw MQ-136 gas sensor reading (0 if unavailable)")
+
+    @field_validator("fish_type")
+    @classmethod
+    def _validate_fish_type(cls, v: str) -> str:
+        v_norm = v.strip().lower()
+        if not v_norm:
+            raise ValueError("fish_type cannot be empty")
+        if v_norm not in settings.ALLOWED_FISH_TYPES:
+            raise ValueError(
+                f"Unsupported fish_type '{v}'. Allowed: {', '.join(settings.ALLOWED_FISH_TYPES)}"
+            )
+        return v_norm
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "fish_type": "salaya",
+                "initial_weight_kg": 10.0,
+                "humidity_percent": 60.0,
+                "mq136_value": 200,
+            }
+        }
+    )
+
+
+class InitialPredictionResponse(BaseModel):
+    batch_id: str
+    recommended_temperature_c: float
+    estimated_total_drying_time_hours: float
+    model_used: str
+    created_at: datetime
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "batch_id": "BATCH-9F12A4B6CD",
+                "recommended_temperature_c": 50.5,
+                "estimated_total_drying_time_hours": 22.25,
+                "model_used": "GradientBoostingRegressor",
+                "created_at": "2026-05-09T12:34:56Z",
+            }
+        }
+    )
+
+
 class DryingTimeResponse(BaseModel):
     batch_id: str
     predicted_remaining_drying_time_hours: float

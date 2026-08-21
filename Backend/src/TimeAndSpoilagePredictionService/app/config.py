@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "TimeAndSpoilagePredictionService"
     APP_VERSION: str = "1.0.0"
     APP_HOST: str = "0.0.0.0"
-    APP_PORT: int = 8001
+    APP_PORT: int = 8003
 
     MONGO_URI: str = "mongodb://localhost:27017"
     MONGO_DB_NAME: str = "fish_drying_db"
@@ -14,11 +14,28 @@ class Settings(BaseSettings):
 
     DRYING_TIME_MODEL_PATH: str = "app/ml_models/drying_time_model.pkl"
     INITIAL_DRYING_TIME_MODEL_PATH: str = "app/ml_models/initial_drying_time_model.pkl"
+    INITIAL_PREDICTION_MODEL_PATH: str = "app/ml_models/initial_prediction_model.pkl"
     SPOILAGE_RISK_MODEL_PATH: str = "app/ml_models/spoilage_risk_model.pkl"
+
+    # --- Drying safety limits --------------------------------------------
+    # Hard caps applied to anything this service recommends to the drying
+    # oven. The oven acts on target_temperature_c directly (it drives the
+    # heater toward it), so an out-of-range prediction must never reach it.
+    #
+    # Change these here, or override per-environment in .env
+    # (e.g. MAX_DRYING_TEMPERATURE_C=65).
+    #
+    # Note: the initial-prediction model was trained on data spanning
+    # 46.0-59.5 C, so anything above ~60 C is extrapolation the model has no
+    # support for, as well as a hardware/quality risk.
+    MAX_DRYING_TEMPERATURE_C: float = 60.0
+    MIN_DRYING_TEMPERATURE_C: float = 25.0
+    # Longest drying run the oven should ever be asked to schedule.
+    MAX_DRYING_DURATION_HOURS: float = 72.0
 
     # --- Integration with sibling services -------------------------------
     # Jayani's waste/salt/batch service (owns batch data).
-    JAYANI_API_URL: str = "http://localhost:8000"
+    JAYANI_API_URL: str = "http://localhost:8001"
     # Milan's IoT drying-oven service (live sensor readings).
     MILAN_API_URL: str = "http://localhost:8002"
     # Collection holding the single active drying batch pointer.
@@ -37,6 +54,11 @@ class Settings(BaseSettings):
         "thalapath",
         "tuna",
         "mackerel",
+        # Thora is a distinct species from Thalapath, but no Thora-specific
+        # training data exists yet. Accepted here and mapped to the
+        # Thalapath model/encoding as a stand-in until real Thora data is
+        # collected and the model is retrained (see FISH_TYPE_ALIASES).
+        "thora",
     )
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

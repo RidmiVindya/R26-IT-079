@@ -1,14 +1,14 @@
 {
   "info": {
     "name": "Time & Spoilage Prediction Service",
-    "description": "FastAPI microservice for fish-drying time prediction, spoilage-risk classification, and smart drying recommendations.\n\nBase URL is parameterised via the `baseUrl` collection variable (default: `http://localhost:8001`).",
+    "description": "FastAPI microservice for fish-drying time prediction, spoilage-risk classification, and smart drying recommendations.\n\nBase URL is parameterised via the `baseUrl` collection variable (default: `http://localhost:8003`).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_postman_id": "r26-it-079-time-spoilage-service"
   },
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost:8001",
+      "value": "http://localhost:8003",
       "type": "string"
     }
   ],
@@ -47,6 +47,27 @@
     {
       "name": "Predictions",
       "item": [
+        {
+          "name": "POST /api/predict/initial",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fish_type\": \"salaya\",\n  \"initial_weight_kg\": 25.0,\n  \"humidity_percent\": 70.0,\n  \"mq136_value\": 200\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/predict/initial",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "predict", "initial"]
+            },
+            "description": "Predicts BOTH the recommended drying chamber temperature and the total drying time for a batch, before drying starts. Requires only conditions known pre-drying (fish_type, initial_weight_kg, humidity_percent, mq136_value) — no temperature input needed, unlike /drying-time. Backed by a trained multi-output ML model with a rule-based fallback."
+          },
+          "response": []
+        },
         {
           "name": "POST /api/predict/drying-time",
           "request": {

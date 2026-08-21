@@ -430,7 +430,11 @@ async def salting_monitor(batch_id: str):
 
     elapsed_hours = (datetime.now() - start_time).total_seconds() / 3600
 
+    already_completed = str(batch.get("saltingStatus", "")).strip().lower() == "completed"
+
     progress = min((elapsed_hours / duration) * 100, 100) if duration > 0 else 100
+    if already_completed:
+        progress = 100
 
     initial = float(batch.get("initialSaltedWeight") or 0)
 
@@ -441,8 +445,12 @@ async def salting_monitor(batch_id: str):
     weight_loss_percentage = (weight_loss / initial) * 100 if initial > 0 else 0
 
     remaining = max(duration - elapsed_hours, 0)
+    if already_completed:
+        remaining = 0
 
-    status = "Completed" if progress >= 100 else "In Progress"
+    # Once a batch has been marked Completed (by elapsed time or manually),
+    # never let a status recompute here revert it back to In Progress.
+    status = "Completed" if already_completed or progress >= 100 else "In Progress"
 
     batches_collection.update_one(
         {"batchId": batch_id},
@@ -467,6 +475,39 @@ async def salting_monitor(batch_id: str):
         "weightLoss": round(weight_loss, 2),
         "weightLossPercentage": round(weight_loss_percentage, 1),
         "remainingHours": round(remaining, 2),
+    }
+
+async def complete_salting(batch_id: str):
+
+    batch = batches_collection.find_one({"batchId": batch_id})
+
+    if not batch:
+        raise HTTPException(
+            status_code=404,
+            detail="Batch not found"
+        )
+
+    if batch.get("saltingStartTime") is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Salting has not started."
+        )
+
+    batches_collection.update_one(
+        {"batchId": batch_id},
+        {
+            "$set": {
+                "saltingStatus": "Completed",
+                "updatedAt": datetime.now(),
+            }
+        }
+    )
+
+    updated_batch = batches_collection.find_one({"batchId": batch_id})
+
+    return {
+        "message": "Salting marked as completed",
+        "batch": serialize_doc(updated_batch),
     }
 
 
