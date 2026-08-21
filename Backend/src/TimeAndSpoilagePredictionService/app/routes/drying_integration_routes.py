@@ -37,6 +37,7 @@ from app.services.batch_client import (
     normalize_fish_type,
 )
 from app.services.drying_time_service import DryingTimeService, get_drying_time_service
+from app.services.initial_prediction_service import InitialPredictionService
 from app.services.sensor_client import (
     SensorServiceUnavailableError,
     fetch_live_reading,
@@ -210,8 +211,28 @@ async def start_drying(
         raise HTTPException(status_code=400, detail="batchId is required")
 
     # Optional: seeded from POST /api/predict/initial, run before drying starts.
+    # Re-clamp here as a second line of defence: these values arrive over the
+    # wire and may be stale or hand-supplied, and the oven acts on them.
     initial_temperature_c = (payload or {}).get("initialTemperatureC")
     initial_total_hours = (payload or {}).get("initialTotalHours")
+
+    if initial_temperature_c is not None or initial_total_hours is not None:
+        try:
+            clamped_temp, clamped_hours = InitialPredictionService.apply_safety_limits(
+                float(initial_temperature_c)
+                if initial_temperature_c is not None
+                else settings.MIN_DRYING_TEMPERATURE_C,
+                float(initial_total_hours) if initial_total_hours is not None else 0.0,
+            )
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=422,
+                detail="initialTemperatureC / initialTotalHours must be numeric",
+            )
+        if initial_temperature_c is not None:
+            initial_temperature_c = clamped_temp
+        if initial_total_hours is not None:
+            initial_total_hours = clamped_hours
 
     try:
         batch = await fetch_batch(str(batch_id))

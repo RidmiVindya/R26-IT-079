@@ -17,6 +17,22 @@ class Settings(BaseSettings):
     INITIAL_PREDICTION_MODEL_PATH: str = "app/ml_models/initial_prediction_model.pkl"
     SPOILAGE_RISK_MODEL_PATH: str = "app/ml_models/spoilage_risk_model.pkl"
 
+    # --- Drying safety limits --------------------------------------------
+    # Hard caps applied to anything this service recommends to the drying
+    # oven. The oven acts on target_temperature_c directly (it drives the
+    # heater toward it), so an out-of-range prediction must never reach it.
+    #
+    # Change these here, or override per-environment in .env
+    # (e.g. MAX_DRYING_TEMPERATURE_C=65).
+    #
+    # Note: the initial-prediction model was trained on data spanning
+    # 46.0-59.5 C, so anything above ~60 C is extrapolation the model has no
+    # support for, as well as a hardware/quality risk.
+    MAX_DRYING_TEMPERATURE_C: float = 60.0
+    MIN_DRYING_TEMPERATURE_C: float = 25.0
+    # Longest drying run the oven should ever be asked to schedule.
+    MAX_DRYING_DURATION_HOURS: float = 72.0
+
     # --- Integration with sibling services -------------------------------
     # Jayani's waste/salt/batch service (owns batch data).
     JAYANI_API_URL: str = "http://localhost:8001"

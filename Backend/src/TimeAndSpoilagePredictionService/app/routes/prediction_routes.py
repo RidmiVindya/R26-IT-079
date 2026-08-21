@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from app.config import settings
 from app.database import get_predictions_collection
 from app.models.prediction_record import build_prediction_record
 from app.schemas.prediction_schema import (
@@ -83,6 +84,23 @@ async def predict_drying_time(
         model_used=model_used,
         created_at=created_at,
     )
+
+
+@router.get(
+    "/safety-limits",
+    summary="Drying safety limits applied to every recommendation",
+)
+async def get_safety_limits():
+    """The caps this service enforces before any value reaches the oven.
+
+    Exposed so clients can display/validate against the same limits instead
+    of hardcoding their own copy.
+    """
+    return {
+        "max_temperature_c": settings.MAX_DRYING_TEMPERATURE_C,
+        "min_temperature_c": settings.MIN_DRYING_TEMPERATURE_C,
+        "max_duration_hours": settings.MAX_DRYING_DURATION_HOURS,
+    }
 
 
 @router.post(

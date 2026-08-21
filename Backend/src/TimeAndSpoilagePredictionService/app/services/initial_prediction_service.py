@@ -91,19 +91,58 @@ class InitialPredictionService:
             return type(inner).__name__
         return type(model).__name__
 
+    @staticmethod
+    def apply_safety_limits(temperature: float, hours: float) -> Tuple[float, float]:
+        """Clamp a recommendation to the configured safe operating envelope.
+
+        The oven drives its heater toward whatever target temperature it is
+        given, so a prediction is never handed onward unclamped. Limits live
+        in config (MAX/MIN_DRYING_TEMPERATURE_C, MAX_DRYING_DURATION_HOURS)
+        and can be overridden via .env.
+        """
+        safe_temperature = min(
+            max(temperature, settings.MIN_DRYING_TEMPERATURE_C),
+            settings.MAX_DRYING_TEMPERATURE_C,
+        )
+        safe_hours = min(max(hours, 0.0), settings.MAX_DRYING_DURATION_HOURS)
+
+        if safe_temperature != temperature:
+            logger.warning(
+                "Predicted temperature %.2f C outside safe range %.1f-%.1f C — clamped to %.2f C.",
+                temperature,
+                settings.MIN_DRYING_TEMPERATURE_C,
+                settings.MAX_DRYING_TEMPERATURE_C,
+                safe_temperature,
+            )
+        if safe_hours != hours:
+            logger.warning(
+                "Predicted drying time %.2f h exceeds max %.1f h — clamped to %.2f h.",
+                hours,
+                settings.MAX_DRYING_DURATION_HOURS,
+                safe_hours,
+            )
+
+        return round(safe_temperature, 2), round(safe_hours, 2)
+
     def predict(self, payload: InitialPredictionRequest) -> Tuple[float, float, str]:
-        """Returns (recommended_temperature_c, estimated_total_drying_time_hours, model_used)."""
+        """Returns (recommended_temperature_c, estimated_total_drying_time_hours, model_used).
+
+        The returned temperature/time are always within the configured safe
+        limits — callers can hand them straight to the oven.
+        """
         features = self._build_features(payload)
         if self._model is not None:
             try:
                 pred = self._model.predict(features)[0]
                 temperature = max(0.0, round(float(pred[0]), 2))
                 hours = max(0.0, round(float(pred[1]), 2))
+                temperature, hours = self.apply_safety_limits(temperature, hours)
                 return temperature, hours, self.model_name
             except Exception as exc:
                 logger.error("Model prediction failed (%s) — falling back.", exc)
 
         temperature, hours = self._rule_based_predict(payload)
+        temperature, hours = self.apply_safety_limits(temperature, hours)
         return temperature, hours, "RuleBasedFallback"
 
     def _build_features(self, p: InitialPredictionRequest) -> np.ndarray:

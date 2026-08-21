@@ -8,7 +8,7 @@ from app.settings import SENSOR_READ_TIMEOUT_SECONDS
 
 load_dotenv()
 
-SERIAL_PORT = os.getenv("SERIAL_PORT", "COM3")
+SERIAL_PORT = os.getenv("SERIAL_PORT", "COM4")
 BAUD_RATE = int(os.getenv("BAUD_RATE", 9600))
 
 # Opt-in software simulation for running without physical Arduino hardware.
