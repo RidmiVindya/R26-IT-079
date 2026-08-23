@@ -36,7 +36,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 ROOT = Path(__file__).resolve().parents[1]
-DATASET_PATH = ROOT / "datasets" / "fish_drying_synthetic_3000.csv"
+DATASET_PATH = ROOT / "datasets" / "fish_drying_oven_3000.csv"
 MODELS_DIR = ROOT / "app" / "ml_models"
 COMPARISON_OUT = MODELS_DIR / "comparison_initial_prediction.csv"
 

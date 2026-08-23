@@ -30,8 +30,16 @@ def raw_to_kg(raw: int | None) -> float | None:
     if raw is None or COUNTS_PER_KG <= 0:
         return None
     kg = (raw - get_raw_zero()) / COUNTS_PER_KG
-    if not math.isfinite(kg) or kg < 0:
+    if not math.isfinite(kg):
         return None
+    if kg < 0:
+        # HX711 electrical noise on an empty/resting scale jitters a few
+        # hundred counts around the true zero. A small negative delta is
+        # still "empty", not an invalid reading; only reject a delta too
+        # large to be noise.
+        if kg < -0.05:
+            return None
+        kg = 0.0
     return round(kg, 3)
 
 

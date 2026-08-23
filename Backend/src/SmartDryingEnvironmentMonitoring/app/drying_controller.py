@@ -18,7 +18,10 @@ from app.models import ControlMode, ControlProfileRequest, DryingSession, Drying
 from app.settings import (
     HUMIDITY_TOLERANCE_PERCENT,
     MANUAL_HEATER_CUTOFF_MARGIN_C,
+    SENSOR_FAULT_AFTER_CONSECUTIVE_FAILURES,
     TEMPERATURE_TOLERANCE_C,
+    WEIGHT_INCREASE_TOLERANCE_FRACTION,
+    WEIGHT_INCREASE_TOLERANCE_KG,
 )
 
 
@@ -35,6 +38,9 @@ class DryingController:
 
     def __init__(self) -> None:
         self._lock = RLock()
+        # Consecutive unusable readings per batch. Guarded by _lock; only ever
+        # touched from process_reading() and cleared when a batch starts.
+        self._sensor_failures: dict[str, int] = {}
 
     @staticmethod
     def _model(session: dict) -> DryingSession:
@@ -48,6 +54,30 @@ class DryingController:
     def _valid_temperature(value) -> bool:
         return isinstance(value, (float, int)) and math.isfinite(value)
 
+    def _register_sensor_failure(self, session: dict, reason: str) -> bool:
+        """Count one unusable reading; fault once too many arrive back to back.
+
+        Returns True when the session was faulted. The caller must stop
+        processing the reading either way - there is no usable data in it.
+        """
+        batch_id = session["batch_id"]
+        failures = self._sensor_failures.get(batch_id, 0) + 1
+        self._sensor_failures[batch_id] = failures
+        if failures < SENSOR_FAULT_AFTER_CONSECUTIVE_FAILURES:
+            # Ride out the gap: actuators keep their current state, and the
+            # next good reading resumes control from the real conditions.
+            save_event(batch_id, "SENSOR_READ_MISSED", {
+                "reason": reason,
+                "consecutive_failures": failures,
+                "fault_after": SENSOR_FAULT_AFTER_CONSECUTIVE_FAILURES,
+            })
+            return False
+        self._fault(session, f"{reason} ({failures} consecutive readings)")
+        return True
+
+    def _clear_sensor_failures(self, batch_id: str) -> None:
+        self._sensor_failures.pop(batch_id, None)
+
     def create_profile(self, profile: ControlProfileRequest) -> DryingSession:
         with self._lock:
             existing = get_session(profile.batch_id)
@@ -57,6 +87,28 @@ class DryingController:
                 raise ConflictError("A session already exists for this batch; create a new batch session instead")
 
             active = get_active_session()
+            if (
+                active
+                and active["batch_id"] != profile.batch_id
+                and active["status"] == DryingStatus.READY.value
+            ):
+                # A READY session is a profile that was set up but never
+                # started, so it holds no heat and owns no hardware state.
+                # Leaving it in place would block every later batch until
+                # someone stopped it by hand; releasing it matches what the
+                # operator is asking for by configuring a different batch.
+                update_session(
+                    active["batch_id"],
+                    status=DryingStatus.STOPPED.value,
+                    stopped_at=utcnow(),
+                    stop_reason="superseded_by_new_batch",
+                )
+                save_event(active["batch_id"], "DRYING_STOPPED", {
+                    "reason": "superseded_by_new_batch",
+                    "superseded_by": profile.batch_id,
+                })
+                active = None
+
             if active and active["batch_id"] != profile.batch_id:
                 raise ConflictError(f"Device already has an active session for batch {active['batch_id']}")
 
@@ -161,6 +213,7 @@ class DryingController:
                 "fan_commanded": False,
                 "light_commanded": False,
             }
+            self._clear_sensor_failures(batch_id)
             session = update_session(batch_id, **updates)
             save_event(batch_id, "DRYING_STARTED", {
                 "mode": mode.value,
@@ -261,7 +314,7 @@ class DryingController:
                 return reading
 
             if not reading.get("online") or reading.get("sensor_errors"):
-                self._fault(session, "Sensor read is missing or invalid")
+                self._register_sensor_failure(session, "Sensor read is missing or invalid")
                 return reading
 
             session = update_session(
@@ -278,15 +331,19 @@ class DryingController:
             if session["status"] != DryingStatus.DRYING.value:
                 return reading
             if not self._valid_temperature(reading.get("temperature")):
-                self._fault(session, "Chamber temperature is missing or invalid")
+                self._register_sensor_failure(session, "Chamber temperature is missing or invalid")
                 return reading
             if not (
                 isinstance(reading.get("humidity"), (int, float))
                 and math.isfinite(reading["humidity"])
                 and 0 <= reading["humidity"] <= 100
             ):
-                self._fault(session, "Chamber humidity is missing or invalid")
+                self._register_sensor_failure(session, "Chamber humidity is missing or invalid")
                 return reading
+
+            # A complete, usable reading: the run is healthy again.
+            self._clear_sensor_failures(session["batch_id"])
+
             if session["mode"] == ControlMode.MANUAL.value:
                 if self._completion_weight_reached(session, reading):
                     self._begin_completion(session, reading)
@@ -298,7 +355,16 @@ class DryingController:
             if not self._valid_weight(reading.get("weight")):
                 self._fault(session, "Batch weight is missing or invalid")
                 return reading
-            if float(reading["weight"]) > float(session["initial_weight_kg"]):
+            # Guard against product being added mid-batch, but allow for load
+            # cell noise: `start` captures one instantaneous sample, so a later
+            # reading can sit slightly above it without any physical change.
+            # Only a rise too large to be jitter is treated as a real fault.
+            initial_weight = float(session["initial_weight_kg"])
+            allowance = max(
+                WEIGHT_INCREASE_TOLERANCE_KG,
+                initial_weight * WEIGHT_INCREASE_TOLERANCE_FRACTION,
+            )
+            if float(reading["weight"]) > initial_weight + allowance:
                 self._fault(session, "Current batch weight exceeds captured initial weight")
                 return reading
 

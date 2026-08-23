@@ -25,13 +25,16 @@ class Settings(BaseSettings):
     # Change these here, or override per-environment in .env
     # (e.g. MAX_DRYING_TEMPERATURE_C=65).
     #
-    # Note: the initial-prediction model was trained on data spanning
-    # 46.0-59.5 C, so anything above ~60 C is extrapolation the model has no
-    # support for, as well as a hardware/quality risk.
-    MAX_DRYING_TEMPERATURE_C: float = 60.0
-    MIN_DRYING_TEMPERATURE_C: float = 25.0
-    # Longest drying run the oven should ever be asked to schedule.
-    MAX_DRYING_DURATION_HOURS: float = 72.0
+    # The oven-drying dataset spans 83-110 C (fast oven drying of small
+    # samples, anchored to a measured balaya 163 g / 100 C / 30 min run).
+    # 120 C matches the oven service's own ControlProfileRequest bound
+    # (target_temperature_c: le=120), so this is the real hardware ceiling
+    # rather than an arbitrary limit.
+    MAX_DRYING_TEMPERATURE_C: float = 120.0
+    MIN_DRYING_TEMPERATURE_C: float = 40.0
+    # Longest drying run the oven should ever be asked to schedule. Oven-scale
+    # batches finish in well under an hour; this only blocks runaway values.
+    MAX_DRYING_DURATION_HOURS: float = 12.0
 
     # --- Integration with sibling services -------------------------------
     # Jayani's waste/salt/batch service (owns batch data).
