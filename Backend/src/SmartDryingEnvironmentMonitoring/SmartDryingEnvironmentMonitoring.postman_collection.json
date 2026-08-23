@@ -1,0 +1,244 @@
+{
+  "info": {
+    "name": "Smart Drying Environment Monitoring",
+    "description": "Endpoints for the SmartDryingEnvironmentMonitoring service (Arduino-backed fish drying oven controller). Base URL defaults to http://127.0.0.1:8002 via the {{baseUrl}} variable.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8002", "type": "string" },
+    { "key": "batchId", "value": "TEST-BATCH-001", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Root / Health",
+      "item": [
+        {
+          "name": "Root",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/", "host": ["{{baseUrl}}"], "path": [""] }
+          }
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sensors",
+      "item": [
+        {
+          "name": "Live Sensor Data (drives control loop)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/iot/live", "host": ["{{baseUrl}}"], "path": ["api", "iot", "live"] }
+          }
+        },
+        {
+          "name": "Raw Sensor Block (debug)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/iot/raw", "host": ["{{baseUrl}}"], "path": ["api", "iot", "raw"] }
+          }
+        },
+        {
+          "name": "Sensor Reading History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/iot/readings?batch_id={{batchId}}&limit=300",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "iot", "readings"],
+              "query": [
+                { "key": "batch_id", "value": "{{batchId}}" },
+                { "key": "limit", "value": "300" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Save Live Reading (legacy/compat)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/iot/save-reading", "host": ["{{baseUrl}}"], "path": ["api", "iot", "save-reading"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Batch Setup",
+      "item": [
+        {
+          "name": "Create Control Profile",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"batch_id\": \"{{batchId}}\",\n  \"target_temperature_c\": 50,\n  \"target_humidity_percent\": 40,\n  \"predicted_duration_minutes\": 120,\n  \"profile_version\": \"v1\",\n  \"source\": \"operator_override\",\n  \"cooling_duration_seconds\": 300\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/iot/control-profiles", "host": ["{{baseUrl}}"], "path": ["api", "iot", "control-profiles"] }
+          }
+        },
+        {
+          "name": "Tare Scale",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"batch_id\": \"{{batchId}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/iot/tare", "host": ["{{baseUrl}}"], "path": ["api", "iot", "tare"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Session Lifecycle",
+      "item": [
+        {
+          "name": "Get Session",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/iot/sessions/{{batchId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "iot", "sessions", "{{batchId}}"]
+            }
+          }
+        },
+        {
+          "name": "Get Session Events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/iot/sessions/{{batchId}}/events?limit=100",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "iot", "sessions", "{{batchId}}", "events"],
+              "query": [{ "key": "limit", "value": "100" }]
+            }
+          }
+        },
+        {
+          "name": "Start Drying (AUTO)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"AUTO\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/iot/sessions/{{batchId}}/start",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "iot", "sessions", "{{batchId}}", "start"]
+            }
+          }
+        },
+        {
+          "name": "Start Drying (MANUAL)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"MANUAL\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/iot/sessions/{{batchId}}/start",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "iot", "sessions", "{{batchId}}", "start"]
+            }
+          }
+        },
+        {
+          "name": "Set Mode",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"MANUAL\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/iot/sessions/{{batchId}}/mode",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "iot", "sessions", "{{batchId}}", "mode"]
+            }
+          }
+        },
+        {
+          "name": "Set Manual Actuators (light only in practice)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"light\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/iot/sessions/{{batchId}}/manual-actuators",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "iot", "sessions", "{{batchId}}", "manual-actuators"]
+            }
+          }
+        },
+        {
+          "name": "Stop Drying",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/iot/sessions/{{batchId}}/stop",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "iot", "sessions", "{{batchId}}", "stop"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Alerts",
+      "item": [
+        {
+          "name": "Check Current Alerts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/iot/alerts/check", "host": ["{{baseUrl}}"], "path": ["api", "iot", "alerts", "check"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Legacy",
+      "item": [
+        {
+          "name": "Legacy Command (deprecated, tare only in practice)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"command\": \"tare\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/iot/command", "host": ["{{baseUrl}}"], "path": ["api", "iot", "command"] }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -40,6 +40,7 @@ async def set_active_batch(
     raw_batch: dict[str, Any],
     initial_temperature_c: Optional[float] = None,
     initial_total_hours: Optional[float] = None,
+    oven_session_id: Optional[str] = None,
 ) -> dict[str, Any]:
     """Mark a batch as the active drying batch (replaces any previous one).
 
@@ -57,6 +58,10 @@ async def set_active_batch(
         "drying_started_at": datetime.now(timezone.utc),
         "initial_temperature_c": initial_temperature_c,
         "initial_total_hours": initial_total_hours,
+        # Id the oven session was opened under. Normally == batch_id, but the
+        # oven's terminal states are sticky, so a batch whose session already
+        # faulted has to run under a fresh suffixed id.
+        "oven_session_id": oven_session_id or batch_id,
         # Keep a snapshot of Jayani's batch for reference / debugging.
         "batch_snapshot": raw_batch,
     }
