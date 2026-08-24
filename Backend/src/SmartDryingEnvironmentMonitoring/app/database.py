@@ -55,7 +55,7 @@ def save_sensor_log(data: dict) -> str:
     record = {**deepcopy(data), "timestamp": utcnow()}
     with _lock:
         _sensor_logs.append(record)
-    _mongo_write(lambda: sensor_collection.insert_one(deepcopy(record)) if sensor_collection else None)
+    _mongo_write(lambda: sensor_collection.insert_one(deepcopy(record)) if sensor_collection is not None else None)
     return str(record.get("_id", "in-memory"))
 
 
@@ -79,7 +79,7 @@ def create_session(session: dict) -> dict:
         if record["batch_id"] in _sessions:
             raise ValueError("A session already exists for this batch")
         _sessions[record["batch_id"]] = record
-    _mongo_write(lambda: session_collection.insert_one(deepcopy(record)) if session_collection else None)
+    _mongo_write(lambda: session_collection.insert_one(deepcopy(record)) if session_collection is not None else None)
     return deepcopy(record)
 
 
@@ -102,10 +102,35 @@ def get_session(batch_id: str) -> dict | None:
 
 def get_active_session() -> dict | None:
     active_states = {"DRYING", "COOLING", "READY"}
+    candidate = None
     with _lock:
         for session in _sessions.values():
             if session.get("status") in active_states:
-                return deepcopy(session)
+                candidate = deepcopy(session)
+                break
+
+    if candidate is not None and session_collection is not None:
+        # The in-memory map is a cache, not the record of truth: entries are
+        # never evicted, so a session ended elsewhere (another worker, or a
+        # direct database edit) would otherwise keep blocking new batches
+        # forever. Confirm against MongoDB before trusting a cached hit.
+        try:
+            record = session_collection.find_one(
+                {"batch_id": candidate["batch_id"]}, {"_id": 0}
+            )
+            if record is None or record.get("status") not in active_states:
+                with _lock:
+                    if record is None:
+                        _sessions.pop(candidate["batch_id"], None)
+                    else:
+                        _sessions[candidate["batch_id"]] = deepcopy(record)
+                candidate = None
+        except Exception as exc:
+            print(f"MongoDB active-session verify failed: {exc}")
+
+    if candidate is not None:
+        return candidate
+
     if session_collection is not None:
         try:
             record = session_collection.find_one({"status": {"$in": list(active_states)}}, {"_id": 0})
@@ -130,7 +155,7 @@ def update_session(batch_id: str, **changes) -> dict:
         result = deepcopy(_sessions[batch_id])
     _mongo_write(
         lambda: session_collection.update_one({"batch_id": batch_id}, {"$set": deepcopy(changes)})
-        if session_collection
+        if session_collection is not None
         else None
     )
     return result
@@ -145,7 +170,7 @@ def save_event(batch_id: str, event_type: str, payload: dict | None = None) -> d
     }
     with _lock:
         _events.append(record)
-    _mongo_write(lambda: event_collection.insert_one(deepcopy(record)) if event_collection else None)
+    _mongo_write(lambda: event_collection.insert_one(deepcopy(record)) if event_collection is not None else None)
     return deepcopy(record)
 
 
@@ -169,5 +194,5 @@ def save_alert_records(alerts: list[dict]) -> list[str]:
             _alerts.append(record)
             records.append(record)
     for record in records:
-        _mongo_write(lambda record=record: alert_collection.insert_one(deepcopy(record)) if alert_collection else None)
+        _mongo_write(lambda record=record: alert_collection.insert_one(deepcopy(record)) if alert_collection is not None else None)
     return [str(record.get("_id", "in-memory")) for record in records]

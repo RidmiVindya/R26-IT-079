@@ -215,6 +215,7 @@ async def start_drying(
     # wire and may be stale or hand-supplied, and the oven acts on them.
     initial_temperature_c = (payload or {}).get("initialTemperatureC")
     initial_total_hours = (payload or {}).get("initialTotalHours")
+    oven_session_id = (payload or {}).get("ovenSessionId")
 
     if initial_temperature_c is not None or initial_total_hours is not None:
         try:
@@ -274,6 +275,7 @@ async def start_drying(
         initial_total_hours=(
             float(initial_total_hours) if initial_total_hours is not None else None
         ),
+        oven_session_id=str(oven_session_id) if oven_session_id else None,
     )
 
     return {
@@ -292,6 +294,8 @@ async def get_active():
     active = await active_batch_store.get_active_batch()
     if not active:
         raise HTTPException(status_code=404, detail="No active drying batch")
+    oven = await _oven_state(active.get("oven_session_id") or active["batch_id"])
+
     return {
         "batchId": active["batch_id"],
         "fishType": active["fish_type"],
@@ -300,6 +304,14 @@ async def get_active():
         "elapsedDryingHours": round(active_batch_store.elapsed_drying_hours(active), 2),
         "initialTemperatureC": active.get("initial_temperature_c"),
         "initialTotalHours": active.get("initial_total_hours"),
+        # Id the oven session actually runs under (see active_batch_store).
+        "ovenSessionId": active.get("oven_session_id") or active["batch_id"],
+        # Ground truth from the oven — the countdown must not run when the
+        # heater isn't actually on.
+        "ovenRunning": oven["running"],
+        "ovenStatus": oven["status"],
+        "ovenReachable": oven["reachable"],
+        "ovenStoppedReason": oven["reason"],
     }
 
 
@@ -333,6 +345,48 @@ async def _require_active_and_sensors() -> tuple[dict[str, Any], dict[str, Any]]
     except SensorServiceUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     return active, sensor
+
+
+# Oven session states that mean drying is NOT currently running.
+_OVEN_NOT_RUNNING = {"STOPPED", "COMPLETED", "FAULT", "READY"}
+
+
+async def _oven_state(batch_id: str) -> dict[str, Any]:
+    """Ask the oven what is actually happening for this batch.
+
+    The active-batch pointer here is only bookkeeping - it says which batch we
+    *think* is drying. The oven is the source of truth for whether the heater
+    is actually running, so the countdown must not be trusted without it.
+    """
+    try:
+        reading = await fetch_live_reading()
+    except SensorServiceUnavailableError:
+        return {"reachable": False, "running": False, "status": None, "reason": None}
+
+    session = reading.get("session") or {}
+    status = (session.get("status") or reading.get("drying_status") or "").upper() or None
+    session_batch = session.get("batch_id")
+
+    if status is None or not session_batch:
+        # No session on the oven at all - nothing is drying.
+        return {"reachable": True, "running": False, "status": status, "reason": None}
+
+    if session_batch != batch_id:
+        return {
+            "reachable": True,
+            "running": False,
+            "status": status,
+            "reason": f"Oven is running a different batch ({session_batch})",
+        }
+
+    running = status not in _OVEN_NOT_RUNNING
+    reason = session.get("fault_reason") or session.get("stop_reason")
+    return {
+        "reachable": True,
+        "running": running,
+        "status": status,
+        "reason": reason,
+    }
 
 
 def _seeded_drying_time_response(active: dict[str, Any], elapsed: float) -> DryingTimeResponse:
