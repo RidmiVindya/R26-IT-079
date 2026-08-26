@@ -39,8 +39,13 @@ RANDOM_SEED = 42
 N_ROWS = 3000
 
 # --- Safe operating band (keep in sync with config.MAX_DRYING_TEMPERATURE_C) --
-TEMP_MIN_C = 80.0
-TEMP_MAX_C = 110.0
+# The oven does not dry effectively below 100 C, so 100 is a floor rather than
+# a midpoint. The measured anchor sits exactly on that floor, which means every
+# row above it is extrapolated from a single real observation: the physics
+# below is sound, but nothing above 100 C has been validated against a real
+# run. Replace these rows with logged runs as they become available.
+TEMP_MIN_C = 100.0
+TEMP_MAX_C = 150.0
 
 # --- Measured anchor ---------------------------------------------------------
 ANCHOR_FISH = "balaya"
@@ -93,8 +98,13 @@ def choose_temperature(rng, thickness: float, fat: float, weight_kg: float) -> f
         + 0.30 * (fat - 1.0)
         + 0.90 * (weight_kg - ANCHOR_WEIGHT_KG) / ANCHOR_WEIGHT_KG
     )
-    temperature = ANCHOR_TEMP_C + load * 18.0
-    temperature += rng.normal(0.0, 2.5)  # operator/session variation
+    # The anchor sits on the floor of the band, so centre the spread above it
+    # instead of around it: anchoring at 100 would clip roughly half the rows
+    # onto the floor and leave the upper range unrepresented.
+    centre = (TEMP_MIN_C + TEMP_MAX_C) / 2.0
+    span = (TEMP_MAX_C - TEMP_MIN_C) / 2.0
+    temperature = centre + load * span
+    temperature += rng.normal(0.0, 4.0)  # operator/session variation
     temperature = float(np.clip(temperature, TEMP_MIN_C, TEMP_MAX_C))
     return round(temperature * 2) / 2  # oven dials move in 0.5 C steps
 
