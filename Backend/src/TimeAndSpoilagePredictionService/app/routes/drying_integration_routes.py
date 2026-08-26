@@ -436,23 +436,46 @@ async def active_drying_time(
     current_weight = _clamp(float(raw_weight), 0.0, initial_weight)
 
     weight_lost = max(0.0, initial_weight - current_weight)
-    # Guard against a near-zero elapsed time (e.g. predicting seconds after
-    # drying starts) producing an absurd kg/hour rate. Require at least a small
-    # window, and cap the rate to a physically sensible ceiling.
-    MIN_ELAPSED_FOR_RATE = 0.5   # hours
-    MAX_WEIGHT_LOSS_RATE = 5.0   # kg/hour
-    if elapsed >= MIN_ELAPSED_FOR_RATE:
+    # Handover: seeded pre-drying estimate -> trained dynamic model.
+    #
+    # The dynamic model's strongest feature is the weight-loss rate, and that
+    # rate is only trustworthy once BOTH conditions hold:
+    #
+    #   * enough time has passed that elapsed is large compared with the
+    #     polling interval, so the division is not dominated by timing jitter;
+    #   * enough mass has actually been lost to clear load-cell noise, so the
+    #     numerator is signal rather than sensor drift.
+    #
+    # Time alone is not sufficient: a stalled or not-yet-heating oven can sit
+    # for minutes having lost nothing, and dividing that nothing by a growing
+    # elapsed time yields a confident-looking rate of ~0 that would tell the
+    # operator drying will never finish.
+    #
+    # These oven runs last roughly 10-40 minutes total, so the thresholds are
+    # deliberately small - a 30-minute warm-up gate would outlast most batches
+    # and the dynamic model would never engage at all.
+    MIN_ELAPSED_FOR_RATE = 3.0 / 60.0    # hours (3 minutes)
+    MIN_WEIGHT_LOSS_KG = 0.003           # 3 g - above HX711 noise on this rig
+    MAX_WEIGHT_LOSS_RATE = 5.0           # kg/hour
+    rate_is_reliable = elapsed >= MIN_ELAPSED_FOR_RATE and weight_lost >= MIN_WEIGHT_LOSS_KG
+    if rate_is_reliable:
         weight_loss_rate = min(weight_lost / elapsed, MAX_WEIGHT_LOSS_RATE)
     else:
-        # Too early to observe a meaningful rate; assume none yet.
+        # No usable rate yet. Every estimator degrades into guesswork without
+        # one - the rule-based fallback in particular divides by a floor rate
+        # and returns an inflated time that contradicts the figure the
+        # operator was shown before starting. Keep showing the pre-drying
+        # estimate until the rate becomes observable.
         weight_loss_rate = 0.0
+        if active.get("initial_total_hours") is not None:
+            return _seeded_drying_time_response(active, elapsed)
 
     try:
         req = DryingTimeRequest(
             fish_type=active["fish_type"],
             initial_weight_kg=initial_weight,
             current_weight_kg=current_weight,
-            temperature_c=_clamp(float(sensor.get("temperature") or 0.0), -10, 120),
+            temperature_c=_clamp(float(sensor.get("temperature") or 0.0), -10, 150),
             humidity_percent=_clamp(float(sensor.get("humidity") or 0.0), 0, 100),
             elapsed_drying_time_hours=_clamp(elapsed, 0, 240),
             weight_loss_rate=max(0.0, weight_loss_rate),
@@ -512,7 +535,7 @@ async def active_spoilage_risk(
 
     try:
         req = SpoilageRiskRequest(
-            temperature_c=_clamp(float(sensor.get("temperature") or 0.0), -10, 120),
+            temperature_c=_clamp(float(sensor.get("temperature") or 0.0), -10, 150),
             humidity_percent=_clamp(float(sensor.get("humidity") or 0.0), 0, 100),
             elapsed_drying_time_hours=_clamp(elapsed, 0, 240),
             weight_loss_percentage=_clamp(weight_loss_pct, 0, 100),
