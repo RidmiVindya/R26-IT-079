@@ -42,7 +42,7 @@ class ControlProfileRequest(BaseModel):
     """A batch control profile produced by the parameter/prediction module."""
 
     batch_id: str = Field(min_length=1, max_length=128)
-    target_temperature_c: float = Field(gt=0, le=120)
+    target_temperature_c: float = Field(gt=0, le=150)
     target_humidity_percent: float = Field(ge=0, le=100)
     predicted_duration_minutes: int | None = Field(default=None, gt=0, le=14_400)
     profile_version: str = Field(default="unversioned", min_length=1, max_length=128)

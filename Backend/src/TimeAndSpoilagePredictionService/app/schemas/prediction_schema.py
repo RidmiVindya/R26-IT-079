@@ -35,7 +35,7 @@ class DryingTimeRequest(BaseModel):
     fish_type: str = Field(..., description="Type of fish, e.g. salaya, sprats, mackerel")
     initial_weight_kg: float = Field(..., gt=0, le=500, description="Initial batch weight in kg")
     current_weight_kg: float = Field(..., ge=0, le=500, description="Current batch weight in kg")
-    temperature_c: float = Field(..., ge=-10, le=120, description="Drying chamber temperature in Celsius")
+    temperature_c: float = Field(..., ge=-10, le=150, description="Drying chamber temperature in Celsius")
     humidity_percent: float = Field(..., ge=0, le=100, description="Relative humidity percentage")
     elapsed_drying_time_hours: float = Field(..., ge=0, le=240, description="Hours elapsed since drying started")
     weight_loss_rate: float = Field(..., ge=0, description="kg lost per hour")
@@ -143,7 +143,7 @@ class DryingTimeResponse(BaseModel):
 # Spoilage risk prediction
 # ---------------------------------------------------------------------------
 class SpoilageRiskRequest(BaseModel):
-    temperature_c: float = Field(..., ge=-10, le=120)
+    temperature_c: float = Field(..., ge=-10, le=150)
     humidity_percent: float = Field(..., ge=0, le=100)
     elapsed_drying_time_hours: float = Field(..., ge=0, le=240)
     weight_loss_percentage: float = Field(..., ge=0, le=100)
@@ -187,7 +187,7 @@ class SpoilageRiskResponse(BaseModel):
 # Smart recommendation
 # ---------------------------------------------------------------------------
 class RecommendationRequest(BaseModel):
-    temperature_c: float = Field(..., ge=-10, le=120)
+    temperature_c: float = Field(..., ge=-10, le=150)
     humidity_percent: float = Field(..., ge=0, le=100)
     elapsed_drying_time_hours: float = Field(..., ge=0, le=240)
     weight_loss_percentage: float = Field(..., ge=0, le=100)

@@ -25,16 +25,28 @@ class Settings(BaseSettings):
     # Change these here, or override per-environment in .env
     # (e.g. MAX_DRYING_TEMPERATURE_C=65).
     #
-    # The oven-drying dataset spans 83-110 C (fast oven drying of small
-    # samples, anchored to a measured balaya 163 g / 100 C / 30 min run).
-    # 120 C matches the oven service's own ControlProfileRequest bound
-    # (target_temperature_c: le=120), so this is the real hardware ceiling
-    # rather than an arbitrary limit.
-    MAX_DRYING_TEMPERATURE_C: float = 120.0
-    MIN_DRYING_TEMPERATURE_C: float = 40.0
+    # The oven does not dry effectively below 100 C, so 100 is a floor rather
+    # than a comfort limit. The oven-drying dataset spans 100-150 C, anchored
+    # to a measured balaya 163 g / 100 C / 30 min run - the anchor sits on the
+    # floor, so everything hotter is extrapolated from that one observation
+    # and has not been validated against a real run.
+    # 150 C must stay in sync with the oven service's own bound
+    # (ControlProfileRequest.target_temperature_c: le=150).
+    MAX_DRYING_TEMPERATURE_C: float = 150.0
+    MIN_DRYING_TEMPERATURE_C: float = 100.0
     # Longest drying run the oven should ever be asked to schedule. Oven-scale
     # batches finish in well under an hour; this only blocks runaway values.
     MAX_DRYING_DURATION_HOURS: float = 12.0
+
+    # --- LLM reasoning (optional) ----------------------------------------
+    # Explains HIGH-risk drying situations in plain language. Purely
+    # advisory: every prediction, alert, and the over-drying auto-stop work
+    # identically whether this is configured or not. Leave OPENAI_API_KEY
+    # empty to disable the feature entirely.
+    OPENAI_API_KEY: str = ""
+    OPENAI_REASONING_MODEL: str = "gpt-4o-mini"
+    LLM_REASONING_ENABLED: bool = True
+    LLM_REQUEST_TIMEOUT_SECONDS: float = 12.0
 
     # --- Integration with sibling services -------------------------------
     # Jayani's waste/salt/batch service (owns batch data).

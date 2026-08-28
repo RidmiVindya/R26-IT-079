@@ -1,12 +1,22 @@
 """Generate a physics-based oven-drying dataset for the initial prediction model.
 
-Anchored to a real measured run:
+Anchored to two real measured runs:
 
     Balaya, 163 g, 100 C, 30 minutes -> properly dried
+    Balaya, 200 g, 120 C, 30 minutes -> perfectly dried
 
-That single observation calibrates the model below; everything else is derived
-from drying physics, so treat this data as *modelled*, not measured. Replace it
-with real logged runs as they become available.
+Two anchors at different temperatures let TEMP_SENSITIVITY be solved from data
+instead of assumed: with one point there is no way to separate "how much does
+temperature matter" from "how much does mass matter" (base_rate alone can
+absorb any error). Solving both anchors together gives
+TEMP_SENSITIVITY ~= 0.70, well below the earlier assumed 1.35 - real drying
+time is less temperature-sensitive than the single-anchor model guessed, once
+mass is properly accounted for.
+
+Everything else is derived from drying physics on top of that; treat this data
+as *modelled*, not measured. Add more real logged runs as they become
+available - each additional anchor further constrains the physics rather than
+requiring an assumption.
 
 Physics used
 ------------
@@ -39,14 +49,26 @@ RANDOM_SEED = 42
 N_ROWS = 3000
 
 # --- Safe operating band (keep in sync with config.MAX_DRYING_TEMPERATURE_C) --
-TEMP_MIN_C = 80.0
-TEMP_MAX_C = 110.0
+# The oven does not dry effectively below 100 C, so 100 is a floor rather than
+# a midpoint. The measured anchor sits exactly on that floor, which means every
+# row above it is extrapolated from a single real observation: the physics
+# below is sound, but nothing above 100 C has been validated against a real
+# run. Replace these rows with logged runs as they become available.
+TEMP_MIN_C = 100.0
+TEMP_MAX_C = 150.0
 
-# --- Measured anchor ---------------------------------------------------------
+# --- Measured anchors ---------------------------------------------------------
+# Two real runs, same species, at different weights and temperatures. Kept as
+# a list so a third anchor can be added later without restructuring anything -
+# calibrate_base_rate_and_sensitivity() below uses only the first two, but more
+# points are a natural next step (least-squares fit) once available.
 ANCHOR_FISH = "balaya"
-ANCHOR_WEIGHT_KG = 0.163
-ANCHOR_TEMP_C = 100.0
-ANCHOR_HOURS = 0.5  # 30 minutes
+ANCHOR_WEIGHT_KG = 0.163  # reference weight the mass_term is normalised to
+ANCHORS = [
+    # (weight_kg, temperature_c, hours)
+    (0.163, 100.0, 0.5),   # 163 g @ 100 C -> 30 min
+    (0.200, 120.0, 0.5),   # 200 g @ 120 C -> 30 min
+]
 
 # --- Per-species drying character -------------------------------------------
 # thickness: relative cross-section (thicker = slower moisture escape)
@@ -82,8 +104,10 @@ MASS_EXPONENT = 0.62        # sub-linear: mass doubles -> time < doubles
 THICKNESS_EXPONENT = 0.85   # thickness dominates diffusion path length
 FAT_EXPONENT = 0.45
 TEMP_REF_C = 100.0
-TEMP_SENSITIVITY = 1.35     # how strongly hotter air shortens drying
 HUMIDITY_SENSITIVITY = 0.35
+# TEMP_SENSITIVITY is no longer a fixed assumption - it is solved from the two
+# anchors in calibrate_base_rate_and_sensitivity() below, since one anchor
+# alone cannot separate temperature effect from mass effect.
 
 
 def choose_temperature(rng, thickness: float, fat: float, weight_kg: float) -> float:
@@ -93,8 +117,13 @@ def choose_temperature(rng, thickness: float, fat: float, weight_kg: float) -> f
         + 0.30 * (fat - 1.0)
         + 0.90 * (weight_kg - ANCHOR_WEIGHT_KG) / ANCHOR_WEIGHT_KG
     )
-    temperature = ANCHOR_TEMP_C + load * 18.0
-    temperature += rng.normal(0.0, 2.5)  # operator/session variation
+    # The anchor sits on the floor of the band, so centre the spread above it
+    # instead of around it: anchoring at 100 would clip roughly half the rows
+    # onto the floor and leave the upper range unrepresented.
+    centre = (TEMP_MIN_C + TEMP_MAX_C) / 2.0
+    span = (TEMP_MAX_C - TEMP_MIN_C) / 2.0
+    temperature = centre + load * span
+    temperature += rng.normal(0.0, 4.0)  # operator/session variation
     temperature = float(np.clip(temperature, TEMP_MIN_C, TEMP_MAX_C))
     return round(temperature * 2) / 2  # oven dials move in 0.5 C steps
 
@@ -106,33 +135,61 @@ def drying_hours(
     temperature_c: float,
     humidity_percent: float,
     base_rate: float,
+    temp_sensitivity: float,
 ) -> float:
     """Thin-layer drying time from the calibrated base rate."""
     mass_term = (weight_kg / ANCHOR_WEIGHT_KG) ** MASS_EXPONENT
     thickness_term = thickness ** THICKNESS_EXPONENT
     fat_term = fat ** FAT_EXPONENT
-    temp_term = (TEMP_REF_C / temperature_c) ** TEMP_SENSITIVITY
+    temp_term = (TEMP_REF_C / temperature_c) ** temp_sensitivity
     humidity_term = (humidity_percent / REF_HUMIDITY) ** HUMIDITY_SENSITIVITY
     return base_rate * mass_term * thickness_term * fat_term * temp_term * humidity_term
 
 
-def calibrate_base_rate() -> float:
-    """Solve for the base rate that reproduces the measured anchor run."""
+def calibrate_base_rate_and_sensitivity() -> tuple[float, float]:
+    """Solve base_rate and TEMP_SENSITIVITY from the two measured anchors.
+
+    Both anchors are the same species (thickness/fat cancel) at the reference
+    humidity, so the physics reduces to:
+
+        hours = base_rate * (weight/ANCHOR_WEIGHT_KG)^MASS_EXPONENT
+                           * (TEMP_REF_C/temperature)^temp_sensitivity
+
+    Two anchors, two unknowns (base_rate, temp_sensitivity) - solved directly
+    rather than by curve-fitting, since two points fully determine two
+    unknowns here.
+    """
+    if len(ANCHORS) < 2:
+        raise ValueError("Need at least two anchors to solve for temp_sensitivity")
+
     profile = FISH_PROFILES[ANCHOR_FISH]
+    (w1, t1, h1), (w2, t2, h2) = ANCHORS[0], ANCHORS[1]
+
+    def mass_term(weight_kg: float) -> float:
+        return (weight_kg / ANCHOR_WEIGHT_KG) ** MASS_EXPONENT
+
+    m1, m2 = mass_term(w1), mass_term(w2)
+
+    # h1 = B * m1 * (TEMP_REF_C/t1)^S ; h2 = B * m2 * (TEMP_REF_C/t2)^S
+    # => h2/h1 = (m2/m1) * (TEMP_REF_C/t2)^S / (TEMP_REF_C/t1)^S
+    ratio = (h2 / h1) / (m2 / m1)
+    log_base = np.log((TEMP_REF_C / t2) / (TEMP_REF_C / t1))
+    if abs(log_base) < 1e-9:
+        raise ValueError("Anchors must use different temperatures to solve temp_sensitivity")
+    temp_sensitivity = float(np.log(ratio) / log_base)
+
+    # base_rate from anchor 1, with thickness/fat = 1.0 (both anchors are balaya).
     unit = drying_hours(
-        ANCHOR_WEIGHT_KG,
-        profile["thickness"],
-        profile["fat"],
-        ANCHOR_TEMP_C,
-        REF_HUMIDITY,
-        base_rate=1.0,
+        w1, profile["thickness"], profile["fat"], t1, REF_HUMIDITY,
+        base_rate=1.0, temp_sensitivity=temp_sensitivity,
     )
-    return ANCHOR_HOURS / unit
+    base_rate = h1 / unit
+    return base_rate, temp_sensitivity
 
 
 def main() -> None:
     rng = np.random.default_rng(RANDOM_SEED)
-    base_rate = calibrate_base_rate()
+    base_rate, temp_sensitivity = calibrate_base_rate_and_sensitivity()
 
     species = list(FISH_SAMPLE_WEIGHTS)
     probs = np.array([FISH_SAMPLE_WEIGHTS[s] for s in species], dtype=float)
@@ -154,7 +211,7 @@ def main() -> None:
         )
         hours = drying_hours(
             weight, profile["thickness"], profile["fat"],
-            temperature, humidity, base_rate,
+            temperature, humidity, base_rate, temp_sensitivity,
         )
         # Run-to-run variation (loading, airflow, piece size spread).
         hours *= float(rng.normal(1.0, 0.06))
@@ -176,6 +233,7 @@ def main() -> None:
 
     print(f"Wrote {len(df)} rows -> {OUT_PATH.relative_to(ROOT)}")
     print(f"base_rate calibrated to {base_rate:.5f}")
+    print(f"temp_sensitivity solved to {temp_sensitivity:.4f} (was a fixed 1.35 assumption)")
     print()
     print("temperature_c      :", round(df["recommended_temperature_c"].min(), 1),
           "-", round(df["recommended_temperature_c"].max(), 1),
@@ -186,13 +244,14 @@ def main() -> None:
           f"(mean={df['estimated_total_drying_time_hours'].mean() * 60:.1f})")
 
     anchor = FISH_PROFILES[ANCHOR_FISH]
-    check = drying_hours(
-        ANCHOR_WEIGHT_KG, anchor["thickness"], anchor["fat"],
-        ANCHOR_TEMP_C, REF_HUMIDITY, base_rate,
-    )
     print()
-    print(f"anchor check: {ANCHOR_FISH} {ANCHOR_WEIGHT_KG*1000:.0f}g @ "
-          f"{ANCHOR_TEMP_C}C -> {check*60:.1f} min (measured {ANCHOR_HOURS*60:.0f} min)")
+    for weight_kg, temp_c, expected_hours in ANCHORS:
+        check = drying_hours(
+            weight_kg, anchor["thickness"], anchor["fat"],
+            temp_c, REF_HUMIDITY, base_rate, temp_sensitivity,
+        )
+        print(f"anchor check: {ANCHOR_FISH} {weight_kg*1000:.0f}g @ "
+              f"{temp_c}C -> {check*60:.1f} min (measured {expected_hours*60:.0f} min)")
 
 
 if __name__ == "__main__":

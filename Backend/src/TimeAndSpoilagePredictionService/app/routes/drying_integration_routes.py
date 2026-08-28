@@ -13,6 +13,7 @@ These routes are additive; the standalone /api/predict/* routes are untouched.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any
@@ -36,8 +37,13 @@ from app.services.batch_client import (
     fetch_batch,
     normalize_fish_type,
 )
+from app.services import llm_reasoning_service, overdrying_monitor_service
 from app.services.drying_time_service import DryingTimeService, get_drying_time_service
 from app.services.initial_prediction_service import InitialPredictionService
+from app.services.oven_control_client import (
+    OvenControlUnavailableError,
+    stop_oven,
+)
 from app.services.sensor_client import (
     SensorServiceUnavailableError,
     fetch_live_reading,
@@ -319,6 +325,11 @@ async def get_active():
 async def stop_drying():
     active = await active_batch_store.get_active_batch()
     await active_batch_store.clear_active_batch()
+    if active and active.get("batch_id"):
+        # Drop per-run state so a later batch cannot inherit this run's
+        # elapsed over-drying timers or its explanations.
+        overdrying_monitor_service.clear_state(active["batch_id"])
+        llm_reasoning_service.clear_state(active["batch_id"])
     return {
         "message": "Drying stopped",
         "batchId": active.get("batch_id") if active else None,
@@ -436,23 +447,46 @@ async def active_drying_time(
     current_weight = _clamp(float(raw_weight), 0.0, initial_weight)
 
     weight_lost = max(0.0, initial_weight - current_weight)
-    # Guard against a near-zero elapsed time (e.g. predicting seconds after
-    # drying starts) producing an absurd kg/hour rate. Require at least a small
-    # window, and cap the rate to a physically sensible ceiling.
-    MIN_ELAPSED_FOR_RATE = 0.5   # hours
-    MAX_WEIGHT_LOSS_RATE = 5.0   # kg/hour
-    if elapsed >= MIN_ELAPSED_FOR_RATE:
+    # Handover: seeded pre-drying estimate -> trained dynamic model.
+    #
+    # The dynamic model's strongest feature is the weight-loss rate, and that
+    # rate is only trustworthy once BOTH conditions hold:
+    #
+    #   * enough time has passed that elapsed is large compared with the
+    #     polling interval, so the division is not dominated by timing jitter;
+    #   * enough mass has actually been lost to clear load-cell noise, so the
+    #     numerator is signal rather than sensor drift.
+    #
+    # Time alone is not sufficient: a stalled or not-yet-heating oven can sit
+    # for minutes having lost nothing, and dividing that nothing by a growing
+    # elapsed time yields a confident-looking rate of ~0 that would tell the
+    # operator drying will never finish.
+    #
+    # These oven runs last roughly 10-40 minutes total, so the thresholds are
+    # deliberately small - a 30-minute warm-up gate would outlast most batches
+    # and the dynamic model would never engage at all.
+    MIN_ELAPSED_FOR_RATE = 3.0 / 60.0    # hours (3 minutes)
+    MIN_WEIGHT_LOSS_KG = 0.003           # 3 g - above HX711 noise on this rig
+    MAX_WEIGHT_LOSS_RATE = 5.0           # kg/hour
+    rate_is_reliable = elapsed >= MIN_ELAPSED_FOR_RATE and weight_lost >= MIN_WEIGHT_LOSS_KG
+    if rate_is_reliable:
         weight_loss_rate = min(weight_lost / elapsed, MAX_WEIGHT_LOSS_RATE)
     else:
-        # Too early to observe a meaningful rate; assume none yet.
+        # No usable rate yet. Every estimator degrades into guesswork without
+        # one - the rule-based fallback in particular divides by a floor rate
+        # and returns an inflated time that contradicts the figure the
+        # operator was shown before starting. Keep showing the pre-drying
+        # estimate until the rate becomes observable.
         weight_loss_rate = 0.0
+        if active.get("initial_total_hours") is not None:
+            return _seeded_drying_time_response(active, elapsed)
 
     try:
         req = DryingTimeRequest(
             fish_type=active["fish_type"],
             initial_weight_kg=initial_weight,
             current_weight_kg=current_weight,
-            temperature_c=_clamp(float(sensor.get("temperature") or 0.0), -10, 120),
+            temperature_c=_clamp(float(sensor.get("temperature") or 0.0), -10, 150),
             humidity_percent=_clamp(float(sensor.get("humidity") or 0.0), 0, 100),
             elapsed_drying_time_hours=_clamp(elapsed, 0, 240),
             weight_loss_rate=max(0.0, weight_loss_rate),
@@ -512,7 +546,7 @@ async def active_spoilage_risk(
 
     try:
         req = SpoilageRiskRequest(
-            temperature_c=_clamp(float(sensor.get("temperature") or 0.0), -10, 120),
+            temperature_c=_clamp(float(sensor.get("temperature") or 0.0), -10, 150),
             humidity_percent=_clamp(float(sensor.get("humidity") or 0.0), 0, 100),
             elapsed_drying_time_hours=_clamp(elapsed, 0, 240),
             weight_loss_percentage=_clamp(weight_loss_pct, 0, 100),
@@ -544,3 +578,83 @@ async def active_spoilage_risk(
         created_at=created_at,
         factors=_spoilage_factors(req, smell_level),
     )
+
+
+# ---------------------------------------------------------------------------
+# Over-drying / burn safety
+#
+# A separate risk axis from spoilage: spoilage is about a batch staying too
+# wet for too long, this is about one that is already dry and still being
+# heated. Kept as its own endpoint and its own field rather than folded into
+# spoilage_risk, because the two failures call for opposite corrective
+# actions and merging them would hide which one is happening.
+# ---------------------------------------------------------------------------
+@router.get(
+    "/active/overdrying-risk",
+    summary="Assess over-drying / burn risk for the active batch (and stop the oven if needed)",
+)
+async def active_overdrying_risk():
+    """Evaluate over-drying risk and, at HIGH risk, stop the oven.
+
+    The stop is the deterministic rule's decision, not the LLM's - the
+    explanation is generated after the fact and never gates the action.
+    """
+    active, sensor = await _require_active_and_sensors()
+    batch_id = active["batch_id"]
+    # The oven session may run under a different id than the batch (see
+    # active_batch_store), and the stop must target the oven's own id.
+    oven_session_id = active.get("oven_session_id") or batch_id
+
+    assessment = overdrying_monitor_service.evaluate(batch_id, sensor)
+
+    stopped = False
+    stop_error: str | None = None
+    if assessment["should_stop"]:
+        try:
+            await stop_oven(oven_session_id)
+            stopped = True
+            # The run is over; drop the timers so a later batch cannot
+            # inherit this one's elapsed state.
+            overdrying_monitor_service.clear_state(batch_id)
+        except OvenControlUnavailableError as exc:
+            # Never swallow this: the oven may still be heating, and the
+            # operator has to know the automatic stop did not land.
+            stop_error = str(exc)
+            logger.error("Auto-stop failed for batch %s: %s", batch_id, exc)
+
+    explanation = None
+    if assessment["reasons"]:
+        explanation = await asyncio.to_thread(
+            llm_reasoning_service.explain,
+            batch_id,
+            "over-drying",
+            assessment["risk"],
+            assessment["reasons"],
+            assessment["details"],
+        )
+
+    return {
+        "batch_id": batch_id,
+        "over_drying_risk": assessment["risk"],
+        "reasons": assessment["reasons"],
+        "details": assessment["details"],
+        "oven_stopped": stopped,
+        "stop_reason": assessment["stop_reason"] if stopped else None,
+        "stop_error": stop_error,
+        "explanation": explanation,
+        "created_at": datetime.now(timezone.utc),
+    }
+
+
+@router.get(
+    "/active/reasoning",
+    summary="Plain-language LLM explanations generated for the active batch",
+)
+async def active_reasoning():
+    """Advisory only. An empty list never means nothing happened - the
+    authoritative state is on the risk endpoints themselves."""
+    active = await _require_active_batch()
+    return {
+        "batch_id": active["batch_id"],
+        "reasoning": llm_reasoning_service.get_explanations(active["batch_id"]),
+    }
