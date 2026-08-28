@@ -13,6 +13,7 @@ These routes are additive; the standalone /api/predict/* routes are untouched.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any
@@ -36,8 +37,13 @@ from app.services.batch_client import (
     fetch_batch,
     normalize_fish_type,
 )
+from app.services import llm_reasoning_service, overdrying_monitor_service
 from app.services.drying_time_service import DryingTimeService, get_drying_time_service
 from app.services.initial_prediction_service import InitialPredictionService
+from app.services.oven_control_client import (
+    OvenControlUnavailableError,
+    stop_oven,
+)
 from app.services.sensor_client import (
     SensorServiceUnavailableError,
     fetch_live_reading,
@@ -319,6 +325,11 @@ async def get_active():
 async def stop_drying():
     active = await active_batch_store.get_active_batch()
     await active_batch_store.clear_active_batch()
+    if active and active.get("batch_id"):
+        # Drop per-run state so a later batch cannot inherit this run's
+        # elapsed over-drying timers or its explanations.
+        overdrying_monitor_service.clear_state(active["batch_id"])
+        llm_reasoning_service.clear_state(active["batch_id"])
     return {
         "message": "Drying stopped",
         "batchId": active.get("batch_id") if active else None,
@@ -567,3 +578,83 @@ async def active_spoilage_risk(
         created_at=created_at,
         factors=_spoilage_factors(req, smell_level),
     )
+
+
+# ---------------------------------------------------------------------------
+# Over-drying / burn safety
+#
+# A separate risk axis from spoilage: spoilage is about a batch staying too
+# wet for too long, this is about one that is already dry and still being
+# heated. Kept as its own endpoint and its own field rather than folded into
+# spoilage_risk, because the two failures call for opposite corrective
+# actions and merging them would hide which one is happening.
+# ---------------------------------------------------------------------------
+@router.get(
+    "/active/overdrying-risk",
+    summary="Assess over-drying / burn risk for the active batch (and stop the oven if needed)",
+)
+async def active_overdrying_risk():
+    """Evaluate over-drying risk and, at HIGH risk, stop the oven.
+
+    The stop is the deterministic rule's decision, not the LLM's - the
+    explanation is generated after the fact and never gates the action.
+    """
+    active, sensor = await _require_active_and_sensors()
+    batch_id = active["batch_id"]
+    # The oven session may run under a different id than the batch (see
+    # active_batch_store), and the stop must target the oven's own id.
+    oven_session_id = active.get("oven_session_id") or batch_id
+
+    assessment = overdrying_monitor_service.evaluate(batch_id, sensor)
+
+    stopped = False
+    stop_error: str | None = None
+    if assessment["should_stop"]:
+        try:
+            await stop_oven(oven_session_id)
+            stopped = True
+            # The run is over; drop the timers so a later batch cannot
+            # inherit this one's elapsed state.
+            overdrying_monitor_service.clear_state(batch_id)
+        except OvenControlUnavailableError as exc:
+            # Never swallow this: the oven may still be heating, and the
+            # operator has to know the automatic stop did not land.
+            stop_error = str(exc)
+            logger.error("Auto-stop failed for batch %s: %s", batch_id, exc)
+
+    explanation = None
+    if assessment["reasons"]:
+        explanation = await asyncio.to_thread(
+            llm_reasoning_service.explain,
+            batch_id,
+            "over-drying",
+            assessment["risk"],
+            assessment["reasons"],
+            assessment["details"],
+        )
+
+    return {
+        "batch_id": batch_id,
+        "over_drying_risk": assessment["risk"],
+        "reasons": assessment["reasons"],
+        "details": assessment["details"],
+        "oven_stopped": stopped,
+        "stop_reason": assessment["stop_reason"] if stopped else None,
+        "stop_error": stop_error,
+        "explanation": explanation,
+        "created_at": datetime.now(timezone.utc),
+    }
+
+
+@router.get(
+    "/active/reasoning",
+    summary="Plain-language LLM explanations generated for the active batch",
+)
+async def active_reasoning():
+    """Advisory only. An empty list never means nothing happened - the
+    authoritative state is on the risk endpoints themselves."""
+    active = await _require_active_batch()
+    return {
+        "batch_id": active["batch_id"],
+        "reasoning": llm_reasoning_service.get_explanations(active["batch_id"]),
+    }

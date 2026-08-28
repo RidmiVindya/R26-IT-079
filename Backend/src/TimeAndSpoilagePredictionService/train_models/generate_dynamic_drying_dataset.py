@@ -62,7 +62,7 @@ from generate_oven_dataset import (  # noqa: E402  (path set above)
     REF_HUMIDITY,
     TEMP_MAX_C,
     TEMP_MIN_C,
-    calibrate_base_rate,
+    calibrate_base_rate_and_sensitivity,
     choose_temperature,
     drying_hours,
 )
@@ -127,7 +127,7 @@ def _loss_fraction_at(elapsed_min: float, total_min: float) -> float:
 
 def build_dataset() -> pd.DataFrame:
     rng = np.random.default_rng(RANDOM_SEED)
-    base_rate = calibrate_base_rate()
+    base_rate, temp_sensitivity = calibrate_base_rate_and_sensitivity()
     rows: list[dict] = []
 
     for run_index in range(N_RUNS):
@@ -148,6 +148,7 @@ def build_dataset() -> pd.DataFrame:
             temperature,
             humidity,
             base_rate,
+            temp_sensitivity,
         )
         predicted_min = predicted_hours * 60.0
 
