@@ -38,6 +38,16 @@ class Settings(BaseSettings):
     # batches finish in well under an hour; this only blocks runaway values.
     MAX_DRYING_DURATION_HOURS: float = 12.0
 
+    # --- LLM reasoning (optional) ----------------------------------------
+    # Explains HIGH-risk drying situations in plain language. Purely
+    # advisory: every prediction, alert, and the over-drying auto-stop work
+    # identically whether this is configured or not. Leave OPENAI_API_KEY
+    # empty to disable the feature entirely.
+    OPENAI_API_KEY: str = ""
+    OPENAI_REASONING_MODEL: str = "gpt-4o-mini"
+    LLM_REASONING_ENABLED: bool = True
+    LLM_REQUEST_TIMEOUT_SECONDS: float = 12.0
+
     # --- Integration with sibling services -------------------------------
     # Jayani's waste/salt/batch service (owns batch data).
     JAYANI_API_URL: str = "http://localhost:8001"
