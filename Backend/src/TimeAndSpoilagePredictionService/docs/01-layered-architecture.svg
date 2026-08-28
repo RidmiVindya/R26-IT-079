@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="960" height="620" viewBox="0 0 960 620" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#444"/>
+    </marker>
+  </defs>
+  <style>
+    .title { font-size:22px; font-weight:700; fill:#0d2b52; }
+    .layer-label { font-size:13px; font-weight:700; fill:#555; }
+    .box { rx:12; }
+    .box-text { font-size:14px; font-weight:600; fill:#fff; text-anchor:middle; }
+    .box-sub { font-size:10.5px; fill:#e8f0fe; text-anchor:middle; }
+    .ext-text { font-size:13px; font-weight:600; fill:#1a1a1a; text-anchor:middle; }
+    .ext-sub { font-size:10px; fill:#555; text-anchor:middle; }
+    .edge-label { font-size:10.5px; fill:#333; text-anchor:middle; }
+    .lane { fill:#f6f8fc; stroke:#e1e6ef; stroke-width:1; rx:14; }
+  </style>
+
+  <text x="480" y="34" class="title" text-anchor="middle">Your Service — Layered Architecture</text>
+  <text x="480" y="54" text-anchor="middle" font-size="12.5" fill="#666">TimeAndSpoilagePredictionService (port 8003)</text>
+
+  <!-- Lane backgrounds -->
+  <rect x="30" y="80" width="900" height="90" class="lane"/>
+  <rect x="30" y="185" width="900" height="90" class="lane"/>
+  <rect x="30" y="290" width="900" height="140" class="lane"/>
+  <rect x="30" y="445" width="900" height="90" class="lane"/>
+
+  <text x="45" y="72" class="layer-label">1. FRONTEND (talks to you)</text>
+  <text x="45" y="177" class="layer-label">2. ROUTES (the front door / API)</text>
+  <text x="45" y="282" class="layer-label">3. SERVICES (the brains / logic)</text>
+  <text x="45" y="437" class="layer-label">4. OUTSIDE THE WALL (other people's systems)</text>
+
+  <!-- Layer 1: Frontend -->
+  <rect x="380" y="95" width="200" height="55" fill="#0d2b52" class="box"/>
+  <text x="480" y="118" class="box-text">Flutter Mobile App</text>
+  <text x="480" y="134" class="box-sub">Drying screen, badges, buttons</text>
+
+  <!-- arrow down -->
+  <line x1="480" y1="150" x2="480" y2="190" stroke="#444" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="560" y="174" class="edge-label">HTTP requests</text>
+
+  <!-- Layer 2: Routes -->
+  <rect x="230" y="200" width="230" height="55" fill="#1c5aa0" class="box"/>
+  <text x="345" y="223" class="box-text">drying_integration_routes.py</text>
+  <text x="345" y="239" class="box-sub">/api/drying/... endpoints</text>
+
+  <rect x="500" y="200" width="230" height="55" fill="#1c5aa0" class="box"/>
+  <text x="615" y="223" class="box-text">prediction_routes.py</text>
+  <text x="615" y="239" class="box-sub">/api/predict/... endpoints</text>
+
+  <line x1="345" y1="255" x2="345" y2="295" stroke="#444" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <line x1="615" y1="255" x2="615" y2="295" stroke="#444" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- Layer 3: Services -->
+  <rect x="45" y="305" width="180" height="50" fill="#2e86ab" class="box"/>
+  <text x="135" y="325" class="box-text" font-size="12.5">initial_prediction</text>
+  <text x="135" y="340" class="box-sub">Guess temp + time</text>
+
+  <rect x="235" y="305" width="180" height="50" fill="#2e86ab" class="box"/>
+  <text x="325" y="325" class="box-text" font-size="12.5">drying_time_service</text>
+  <text x="325" y="340" class="box-sub">Live remaining-time</text>
+
+  <rect x="425" y="305" width="180" height="50" fill="#2e86ab" class="box"/>
+  <text x="515" y="325" class="box-text" font-size="12.5">spoilage_risk</text>
+  <text x="515" y="340" class="box-sub">Too-wet risk</text>
+
+  <rect x="615" y="305" width="150" height="50" fill="#d9534f" class="box"/>
+  <text x="690" y="325" class="box-text" font-size="12.5">overdrying_monitor</text>
+  <text x="690" y="340" class="box-sub">Too-hot risk</text>
+
+  <rect x="775" y="305" width="140" height="50" fill="#d9534f" class="box"/>
+  <text x="845" y="325" class="box-text" font-size="12.5">oven_control_client</text>
+  <text x="845" y="340" class="box-sub">Sends STOP</text>
+
+  <rect x="45" y="370" width="180" height="50" fill="#6a4c93" class="box"/>
+  <text x="135" y="390" class="box-text" font-size="12.5">active_batch_store</text>
+  <text x="135" y="405" class="box-sub">Remembers current batch</text>
+
+  <rect x="235" y="370" width="180" height="50" fill="#6a4c93" class="box"/>
+  <text x="325" y="390" class="box-text" font-size="12.5">sensor_client</text>
+  <text x="325" y="405" class="box-sub">Fetches live readings</text>
+
+  <rect x="425" y="370" width="180" height="50" fill="#e8a33d" class="box"/>
+  <text x="515" y="390" class="box-text" font-size="12.5">llm_reasoning_service</text>
+  <text x="515" y="405" class="box-sub">Asks the AI to explain</text>
+
+  <rect x="615" y="370" width="180" height="50" fill="#6a4c93" class="box"/>
+  <text x="705" y="390" class="box-text" font-size="12.5">batch_client</text>
+  <text x="705" y="405" class="box-sub">Fetches batch info</text>
+
+  <!-- arrows to outside -->
+  <line x1="325" y1="420" x2="325" y2="450" stroke="#444" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <line x1="845" y1="355" x2="845" y2="450" stroke="#444" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <line x1="515" y1="420" x2="700" y2="450" stroke="#444" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <line x1="705" y1="420" x2="705" y2="450" stroke="#444" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- Layer 4: Outside -->
+  <rect x="80" y="460" width="230" height="55" fill="#fff" stroke="#999" stroke-width="1.4" rx="12"/>
+  <text x="195" y="483" class="ext-text">Milan's Oven Service</text>
+  <text x="195" y="499" class="ext-sub">port 8002 — sensors + the oven itself</text>
+
+  <rect x="630" y="460" width="150" height="55" fill="#fff" stroke="#999" stroke-width="1.4" rx="12"/>
+  <text x="705" y="483" class="ext-text">Jayani's Service</text>
+  <text x="705" y="499" class="ext-sub">port 8001 — batch info</text>
+
+  <rect x="800" y="460" width="150" height="55" fill="#fff" stroke="#999" stroke-width="1.4" rx="12"/>
+  <text x="875" y="483" class="ext-text">OpenAI</text>
+  <text x="875" y="499" class="ext-sub">writes the explanation</text>
+
+  <text x="480" y="545" text-anchor="middle" font-size="12" fill="#666" font-style="italic">
+    Each layer only talks to the layer right below it. The app never touches Milan's oven directly —
+  </text>
+  <text x="480" y="562" text-anchor="middle" font-size="12" fill="#666" font-style="italic">
+    it always goes through your service first, so your service is the single point that decides what's safe.
+  </text>
+</svg>
