@@ -1,4 +1,5 @@
-# pyrefly: ignore [missing-import]
+# pyrefly: ignore-file
+# type: ignore
 from fastapi import HTTPException
 from datetime import datetime
 from app.config.db import batches_collection, notifications_collection
@@ -53,9 +54,39 @@ def get_salt_ratio(fish_type: str) -> float:
     return FISH_SALT_RATIOS.get(normalized, 0.20)
 
 
+def clean_weight_val(val):
+    if val is None:
+        return 0.0
+    if isinstance(val, (int, float)):
+        return float(val)
+    s = str(val).lower().replace("kg", "").replace("g", "").strip()
+    try:
+        return float(s)
+    except (ValueError, TypeError):
+        return 0.0
+
+
 def serialize_doc(doc):
-    if doc and "_id" in doc:
+    if not doc:
+        return doc
+    if "_id" in doc:
         doc["_id"] = str(doc["_id"])
+
+    weight_keys = [
+        "rawWeight",
+        "cleanedWeight",
+        "predictedWaste",
+        "saltAmount",
+        "currentWeight",
+        "initialSaltedWeight",
+        "weightGain",
+        "weightLoss",
+    ]
+
+    for key in weight_keys:
+        if key in doc and doc[key] is not None:
+            doc[key] = clean_weight_val(doc[key])
+
     return doc
 
 
@@ -100,7 +131,7 @@ async def create_batch(data: dict):
         raise HTTPException(status_code=400, detail="fishType and rawWeight are required")
 
     try:
-        raw_weight_val = float(raw_weight)
+        raw_weight_val = clean_weight_val(raw_weight)
         if raw_weight_val <= 0:
             raise HTTPException(
                 status_code=400,
@@ -125,22 +156,17 @@ async def create_batch(data: dict):
         "rawWeight": raw_weight_val,
         "date": data.get("date") or datetime.now().strftime("%Y-%m-%d"),
         "location": data.get("location", ""),
-
         "predictedWaste": predicted_waste,
         "cleanedWeight": cleaned_weight,
-
         "saltAmount": salt_amount,
         "recommendedDuration": duration,
         "saltingDurationHours": duration,
-
         "saltingStartTime": None,
         "saltingStatus": "Not Started",
-
         "initialSaltedWeight": 0,
         "currentWeight": 0,
         "weightLoss": 0,
         "weightLossPercentage": 0,
-
         "createdAt": datetime.now(),
         "updatedAt": datetime.now(),
     }
@@ -153,11 +179,55 @@ async def create_batch(data: dict):
     }
 
 
+def sync_batch_current_weight(batch):
+    if not batch:
+        return batch
+    status = str(batch.get("saltingStatus", "")).strip().lower()
+    if status == "completed":
+        initial = float(batch.get("initialSaltedWeight") or batch.get("cleanedWeight") or 0)
+        salt_amount = float(batch.get("saltAmount") or 0)
+        if salt_amount <= 0 and initial > 0:
+            fish_type = batch.get("fishType", "Mackerel")
+            salt_ratio = get_salt_ratio(fish_type)
+            salt_amount = round(initial * salt_ratio, 3)
+
+        added_salt = round(0.75 * salt_amount, 3)
+        expected_current = round(initial + added_salt, 3)
+        weight_gain_pct = round((added_salt / initial) * 100, 1) if initial > 0 else 0.0
+
+        batch["currentWeight"] = expected_current
+        batch["weightGain"] = added_salt
+        batch["weightGainPercentage"] = weight_gain_pct
+        batch["weightChange"] = added_salt
+        batch["weightChangeGrams"] = round(added_salt * 1000, 1) if initial < 10 else round(added_salt, 1)
+        batch["weightChangeFormatted"] = f"+{round(added_salt * 1000, 1)} g" if initial < 10 else f"+{round(added_salt, 1)} g"
+        batch["weightLoss"] = 0
+        batch["weightLossPercentage"] = 0
+        
+        batches_collection.update_one(
+            {"_id": batch["_id"]},
+            {
+                "$set": {
+                    "currentWeight": expected_current,
+                    "weightGain": added_salt,
+                    "weightGainPercentage": weight_gain_pct,
+                    "weightChange": added_salt,
+                    "weightLoss": 0,
+                    "weightLossPercentage": 0,
+                    "updatedAt": datetime.now(),
+                }
+            }
+        )
+    return batch
+
+
 async def get_batch_by_id(batch_id: str):
     batch = batches_collection.find_one({"batchId": batch_id})
 
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
+
+    batch = sync_batch_current_weight(batch)
 
     return {
         "message": "Batch fetched successfully",
@@ -167,7 +237,7 @@ async def get_batch_by_id(batch_id: str):
 
 async def get_all_batches():
     batches = list(batches_collection.find().sort("createdAt", -1))
-    batches = [serialize_doc(batch) for batch in batches]
+    batches = [serialize_doc(sync_batch_current_weight(batch)) for batch in batches]
 
     return {
         "message": "Batches fetched successfully",
@@ -381,6 +451,7 @@ async def start_salting(batch_id: str):
         )
 
     now = datetime.now()
+    cleaned_weight = float(batch.get("cleanedWeight") or 0)
 
     batches_collection.update_one(
         {"batchId": batch_id},
@@ -388,8 +459,8 @@ async def start_salting(batch_id: str):
             "$set": {
                 "saltingStartTime": now,
                 "saltingStatus": "In Progress",
-                "initialSaltedWeight": batch.get("cleanedWeight", 0),
-                "currentWeight": batch.get("cleanedWeight", 0),
+                "initialSaltedWeight": cleaned_weight,
+                "currentWeight": cleaned_weight,
                 "updatedAt": now,
             }
         }
@@ -436,13 +507,26 @@ async def salting_monitor(batch_id: str):
     if already_completed:
         progress = 100
 
-    initial = float(batch.get("initialSaltedWeight") or 0)
+    cleaned_weight = float(batch.get("cleanedWeight") or 0)
+    initial = float(batch.get("initialSaltedWeight") or cleaned_weight or 0)
 
-    current = max(initial - (elapsed_hours * 0.15), 0)
+    # Fetch or compute recommended salt amount
+    salt_amount = float(batch.get("saltAmount") or 0)
+    if salt_amount <= 0 and initial > 0:
+        fish_type = batch.get("fishType", "Mackerel")
+        salt_ratio = get_salt_ratio(fish_type)
+        salt_amount = round(initial * salt_ratio, 3)
 
-    weight_loss = initial - current
+    # Increase weight by up to 3/4 of recommended salt amount as salting completes
+    added_salt_weight = 0.75 * salt_amount
+    completion_ratio = min(elapsed_hours / duration, 1.0) if duration > 0 else 1.0
+    if already_completed:
+        completion_ratio = 1.0
 
-    weight_loss_percentage = (weight_loss / initial) * 100 if initial > 0 else 0
+    current = initial + (completion_ratio * added_salt_weight)
+
+    weight_gain = current - initial
+    weight_gain_percentage = (weight_gain / initial) * 100 if initial > 0 else 0
 
     remaining = max(duration - elapsed_hours, 0)
     if already_completed:
@@ -456,9 +540,12 @@ async def salting_monitor(batch_id: str):
         {"batchId": batch_id},
         {
             "$set": {
+                "initialSaltedWeight": initial,
                 "currentWeight": current,
-                "weightLoss": weight_loss,
-                "weightLossPercentage": weight_loss_percentage,
+                "weightGain": weight_gain,
+                "weightGainPercentage": weight_gain_percentage,
+                "weightLoss": 0,
+                "weightLossPercentage": 0,
                 "saltingStatus": status,
                 "updatedAt": datetime.now(),
             }
@@ -471,9 +558,18 @@ async def salting_monitor(batch_id: str):
         "status": status,
         "startTime": start_time.isoformat(),
         "progress": round(progress, 1),
-        "currentWeight": round(current, 2),
-        "weightLoss": round(weight_loss, 2),
-        "weightLossPercentage": round(weight_loss_percentage, 1),
+        "cleanedWeight": round(cleaned_weight if cleaned_weight > 0 else initial, 3),
+        "initialSaltedWeight": round(initial, 3),
+        "currentWeight": round(current, 3),
+        "saltAmount": round(salt_amount, 3),
+        "addedSaltWeight": round(added_salt_weight, 3),
+        "weightGain": round(weight_gain, 3),
+        "weightGainPercentage": round(weight_gain_percentage, 1),
+        "weightChange": round(weight_gain, 3),
+        "weightChangeGrams": round(weight_gain * 1000, 1) if initial < 10 else round(weight_gain, 1),
+        "weightChangeFormatted": f"+{round(weight_gain * 1000, 1)} g" if initial < 10 else f"+{round(weight_gain, 1)} g",
+        "weightLoss": 0,
+        "weightLossPercentage": 0,
         "remainingHours": round(remaining, 2),
     }
 
@@ -493,11 +589,28 @@ async def complete_salting(batch_id: str):
             detail="Salting has not started."
         )
 
+    cleaned_weight = float(batch.get("cleanedWeight") or 0)
+    initial = float(batch.get("initialSaltedWeight") or cleaned_weight or 0)
+
+    salt_amount = float(batch.get("saltAmount") or 0)
+    if salt_amount <= 0 and initial > 0:
+        fish_type = batch.get("fishType", "Mackerel")
+        salt_ratio = get_salt_ratio(fish_type)
+        salt_amount = round(initial * salt_ratio, 3)
+
+    added_salt_weight = 0.75 * salt_amount
+    final_weight = initial + added_salt_weight
+
     batches_collection.update_one(
         {"batchId": batch_id},
         {
             "$set": {
                 "saltingStatus": "Completed",
+                "currentWeight": final_weight,
+                "weightGain": added_salt_weight,
+                "weightGainPercentage": (added_salt_weight / initial) * 100 if initial > 0 else 0,
+                "weightLoss": 0,
+                "weightLossPercentage": 0,
                 "updatedAt": datetime.now(),
             }
         }
