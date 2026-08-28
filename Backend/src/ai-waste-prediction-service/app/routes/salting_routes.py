@@ -1,3 +1,4 @@
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, HTTPException
 from datetime import datetime, timedelta
 from app.config.db import db
@@ -68,6 +69,11 @@ async def get_salting_status(batch_id: str):
 
     if elapsed_hours >= recommended_duration:
         status = "completed"
+        cleaned_weight = float(batch.get("cleanedWeight") or 0)
+        initial = float(batch.get("initialSaltedWeight") or cleaned_weight or 0)
+        salt_amount = float(batch.get("recommendedSalt") or batch.get("saltAmount") or 0)
+        added_salt = round(0.75 * salt_amount, 3)
+        final_weight = round(initial + added_salt, 3)
 
         db.batches.update_one(
             {"batchId": batch_id},
@@ -75,6 +81,8 @@ async def get_salting_status(batch_id: str):
                 "$set": {
                     "saltingStatus": "completed",
                     "saltingCompletedAt": current_time,
+                    "currentWeight": final_weight,
+                    "weightGain": added_salt,
                 }
             },
         )
@@ -106,6 +114,11 @@ async def complete_salting_manually(batch_id: str):
         raise HTTPException(status_code=404, detail="Batch not found")
 
     completed_time = datetime.utcnow()
+    cleaned_weight = float(batch.get("cleanedWeight") or 0)
+    initial = float(batch.get("initialSaltedWeight") or cleaned_weight or 0)
+    salt_amount = float(batch.get("recommendedSalt") or batch.get("saltAmount") or 0)
+    added_salt = round(0.75 * salt_amount, 3)
+    final_weight = round(initial + added_salt, 3)
 
     db.batches.update_one(
         {"batchId": batch_id},
@@ -113,6 +126,8 @@ async def complete_salting_manually(batch_id: str):
             "$set": {
                 "saltingStatus": "completed",
                 "saltingCompletedAt": completed_time,
+                "currentWeight": final_weight,
+                "weightGain": added_salt,
             }
         },
     )
