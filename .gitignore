@@ -22,9 +22,7 @@ ENV/
 .virtualenv/
 
 # Environment variables / secrets
-.env
-.env.*
-!.env.example
+
 
 # Packaging / build artifacts
 *.egg-info/
