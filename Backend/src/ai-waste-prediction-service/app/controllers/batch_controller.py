@@ -407,24 +407,33 @@ async def send_waste_notification(batch_id: str):
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
 
-    predicted_waste = batch.get("predictedWaste", 0)
+    raw_predicted_waste = float(batch.get("predictedWaste", 0) or 0)
 
-    if not predicted_waste or predicted_waste <= 0:
+    if not raw_predicted_waste or raw_predicted_waste <= 0:
         raise HTTPException(
             status_code=400,
             detail="Waste prediction must be completed before sending notification"
         )
 
+    # Convert to kilograms if value is currently stored in grams (> 100)
+    predicted_waste_kg = round(raw_predicted_waste / 1000.0, 3) if raw_predicted_waste > 100 else raw_predicted_waste
+
+    if predicted_waste_kg < 1.0:
+        raise HTTPException(
+            status_code=400,
+            detail="Predicted waste is below the 1 kg collection threshold. No recycling notification is required."
+        )
+
     message = generate_waste_notification_message(
         batch["fishType"],
         batch["batchId"],
-        predicted_waste
+        predicted_waste_kg
     )
 
     notification = {
         "batchId": batch["batchId"],
         "fishType": batch["fishType"],
-        "predictedWaste": predicted_waste,
+        "predictedWaste": predicted_waste_kg,
         "recipientType": "recycler",
         "message": message,
         "status": "generated",
