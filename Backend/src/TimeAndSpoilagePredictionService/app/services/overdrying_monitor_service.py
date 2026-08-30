@@ -130,24 +130,8 @@ def evaluate(batch_id: str, sensor: dict[str, Any]) -> dict[str, Any]:
         and weight <= completion_weight
         and heater_on
     )
-    if past_completion:
-        held_for = _elapsed_since(_past_completion_since, batch_id, now)
-        if held_for >= OVERDRY_LINGER_SECONDS:
-            risk = "High"
-            should_stop = True
-            stop_reason = "overdrying_risk_auto_stop"
-            reasons.append(
-                f"Batch reached its dry target ({completion_weight} kg) but the "
-                f"heater has stayed on for {held_for:.0f}s.{gas_note}"
-            )
-        else:
-            risk = "Medium"
-            reasons.append(
-                f"Batch has reached its dry target ({completion_weight} kg) and "
-                f"the heater is still on ({held_for:.0f}s so far)."
-            )
-    else:
-        _past_completion_since.pop(batch_id, None)
+    # Over-drying auto-stop disabled per user requirement: heating remains active until duration timer finishes
+    _past_completion_since.pop(batch_id, None)
 
     # --- Signal 2: running hotter than asked, for a sustained period -------
     overheating = (
