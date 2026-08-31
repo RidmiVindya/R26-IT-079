@@ -8,7 +8,7 @@ from app.settings import SENSOR_BLOCK_CACHE_SECONDS, SENSOR_READ_TIMEOUT_SECONDS
 
 load_dotenv()
 
-SERIAL_PORT = os.getenv("SERIAL_PORT", "COM4")
+SERIAL_PORT = os.getenv("SERIAL_PORT", "/dev/cu.usbserial-A5069RR4")
 BAUD_RATE = int(os.getenv("BAUD_RATE", 9600))
 
 # Opt-in software simulation for running without physical Arduino hardware.
@@ -65,6 +65,17 @@ def _mock_sensor_block():
     ]
 
 
+def find_available_port():
+    import glob, sys
+    if os.path.exists(SERIAL_PORT):
+        return SERIAL_PORT
+    patterns = ['/dev/cu.usbserial*', '/dev/cu.usbmodem*', '/dev/cu.wchusbserial*', '/dev/ttyUSB*', '/dev/ttyACM*']
+    for pat in patterns:
+        ports = glob.glob(pat)
+        if ports:
+            return ports[0]
+    return SERIAL_PORT
+
 def connect_arduino():
     global arduino
 
@@ -75,20 +86,21 @@ def connect_arduino():
     with serial_lock:
         if arduino is not None and arduino.is_open:
             return True
+        target_port = find_available_port()
         try:
             arduino = serial.Serial(
-                port=SERIAL_PORT,
+                port=target_port,
                 baudrate=BAUD_RATE,
                 timeout=1,
                 write_timeout=1,
             )
             time.sleep(2)
             arduino.reset_input_buffer()
-            print(f"Connected to Arduino on {SERIAL_PORT}")
+            print(f"Connected to Arduino on {target_port}")
             return True
         except Exception as e:
             arduino = None
-            print(f"Arduino connection failed: {e}")
+            print(f"Arduino connection failed on {target_port}: {e}")
             return False
 
 
@@ -122,7 +134,7 @@ def read_serial_line():
         return None
 
 
-def read_sensor_block(timeout_seconds: float = SENSOR_READ_TIMEOUT_SECONDS):
+def read_sensor_block(timeout_seconds: float = 0.5):
     """
     Reads one complete SENSOR DATA block
     """
@@ -145,7 +157,7 @@ def read_sensor_block(timeout_seconds: float = SENSOR_READ_TIMEOUT_SECONDS):
         # serial_lock for a whole read, so without the cache each waiting
         # caller would start its own read and they would queue up behind
         # each other for no benefit - the device has nothing newer to give.
-        if _last_block and (time.monotonic() - _last_block_at) < SENSOR_BLOCK_CACHE_SECONDS:
+        if _last_block and (time.monotonic() - _last_block_at) < 15.0:
             return list(_last_block)
 
         # Drop a backlog only when it is large enough to be genuinely stale
@@ -170,7 +182,7 @@ def read_sensor_block(timeout_seconds: float = SENSOR_READ_TIMEOUT_SECONDS):
 
             if started:
                 block.append(line)
-                if "-----------------------" in line:
+                if "----" in line or "====" in line or len(block) >= 8:
                     _last_block = list(block)
                     _last_block_at = time.monotonic()
                     return block
@@ -185,13 +197,11 @@ def send_command(command):
         print(f"MOCK_SENSORS enabled; pretending to send command: {command}")
         return True
 
-    with serial_lock:
-        if arduino is None or not arduino.is_open:
-            return False
-        try:
-            arduino.write(command.encode("utf-8"))
-            arduino.flush()
-            return True
-        except Exception as e:
-            print("Command send error:", e)
-            return False
+    if arduino is None or not arduino.is_open:
+        return False
+    try:
+        arduino.write(command.encode("utf-8"))
+        return True
+    except Exception as e:
+        print("Command send error:", e)
+        return False

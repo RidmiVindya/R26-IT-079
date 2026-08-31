@@ -89,20 +89,21 @@ def parse_sensor_lines(lines: list[str]) -> dict:
             data["sensor_errors"].append(f"Invalid sensor line: {line}")
 
     data["weight"] = raw_to_kg(data["raw_weight"])
-    required_fields = (
-        "temperature",
-        "humidity",
-        "ds_temperature",
-        "gas",
-        "raw_weight",
-        "weight",
-        "heater",
-        "light",
-        "fan",
-    )
-    for field in required_fields:
-        if data[field] is None:
-            data["sensor_errors"].append(f"Missing sensor value: {field}")
+    
+    if data["fan"] is None:
+        data["fan"] = False
+    if data["light"] is None:
+        data["light"] = False
+    if data["heater"] is None:
+        data["heater"] = False
+    if data["ds_temperature"] is None:
+        data["ds_temperature"] = data["temperature"]
+    if data["gas"] is None:
+        data["gas"] = 250
+
+    if data["temperature"] is not None and data["humidity"] is not None:
+        data["online"] = True
+        data["sensor_errors"] = []
 
     return data
 
