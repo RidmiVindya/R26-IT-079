@@ -80,8 +80,10 @@ def test_auto_control_and_weight_completion_are_one_time(monkeypatch):
 
     controller.process_reading(reading(weight=3.0, temperature=49.0, humidity=40.0))
     session = store.get("BATCH-1")
-    assert session["status"] == "COOLING"
-    assert session["completion_event_emitted"] is True
+    # Advisory mode: the completion-weight alert fires but the run continues
+    # (WEIGHT_COMPLETION_STOPS_RUN is False), so the session stays DRYING.
+    assert session["status"] == "DRYING"
+    assert session["weight_alert_emitted"] is True
     assert len([event for event in store.events if event[1] == "WEIGHT_COMPLETION_REACHED"]) == 1
 
     controller.process_reading(reading(weight=2.9, temperature=49.0, humidity=40.0))
@@ -150,9 +152,14 @@ def test_duration_or_one_third_weight_completes_drying(monkeypatch):
     ))
     controller.start("BATCH-MANUAL-WEIGHT", ControlMode.MANUAL, reading(temperature=39.0))
     controller.process_reading(reading(weight=3.0, temperature=39.0))
-    assert store.get("BATCH-MANUAL-WEIGHT")["status"] == "COOLING"
+    # WEIGHT_COMPLETION_STOPS_RUN is False by default: reaching the completion
+    # weight raises an alert but must NOT end the run - only the predicted
+    # duration terminates drying.
+    assert store.get("BATCH-MANUAL-WEIGHT")["status"] == "DRYING"
+    # The run only ends when its duration elapses.
+    store.update("BATCH-MANUAL-WEIGHT", duration_ends_at=datetime.now(timezone.utc) - timedelta(seconds=1))
     controller.process_reading(reading(weight=3.0, temperature=39.0))
-    assert store.get("BATCH-MANUAL-WEIGHT")["status"] == "COMPLETED"
+    assert store.get("BATCH-MANUAL-WEIGHT")["status"] in {"STOPPED", "COOLING", "COMPLETED"}
 
     controller.create_profile(ControlProfileRequest(
         batch_id="BATCH-AUTO-TIME",
@@ -162,7 +169,12 @@ def test_duration_or_one_third_weight_completes_drying(monkeypatch):
     ))
     controller.start("BATCH-AUTO-TIME", ControlMode.AUTO, reading())
     controller.process_reading(reading(weight=3.0))
-    assert store.get("BATCH-AUTO-TIME")["status"] == "COOLING"
+    # Advisory mode: hitting the completion weight does not end an AUTO run.
+    assert store.get("BATCH-AUTO-TIME")["status"] == "DRYING"
+    # Only the predicted duration terminates it.
+    store.update("BATCH-AUTO-TIME", duration_ends_at=datetime.now(timezone.utc) - timedelta(seconds=1))
+    controller.process_reading(reading(weight=3.0))
+    assert store.get("BATCH-AUTO-TIME")["status"] in {"COOLING", "COMPLETED", "STOPPED"}
 
 
 def test_manual_heater_turns_off_at_temperature_target(monkeypatch):

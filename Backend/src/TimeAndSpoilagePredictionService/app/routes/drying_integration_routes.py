@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any
 
@@ -56,6 +57,21 @@ from app.services.spoilage_risk_service import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/drying", tags=["Drying Integration"])
+
+# --- Advisory mode -------------------------------------------------------
+# When False (the default), the drying run is terminated ONLY by the
+# pre-drying predicted duration elapsing. Over-drying / overheating and
+# spoilage risk are surfaced as alerts and never stop the oven.
+OVERDRYING_AUTO_STOP_ENABLED = (
+    os.getenv("OVERDRYING_AUTO_STOP_ENABLED", "false").strip().lower()
+    in ("1", "true", "yes")
+)
+# When False (the default), the remaining-time countdown is derived from
+# the pre-drying estimate only, never re-predicted from live sensors.
+DYNAMIC_TIME_PREDICTION_ENABLED = (
+    os.getenv("DYNAMIC_TIME_PREDICTION_ENABLED", "false").strip().lower()
+    in ("1", "true", "yes")
+)
 
 
 def _clamp(value: float, lo: float, hi: float) -> float:
@@ -432,6 +448,16 @@ async def active_drying_time(
     active = await _require_active_batch()
     elapsed = active_batch_store.elapsed_drying_hours(active)
 
+    # DYNAMIC RE-ESTIMATION DISABLED.
+    #
+    # The countdown now runs purely off the pre-drying prediction captured at
+    # /api/drying/start (initial_total_hours) minus elapsed time, so the oven
+    # runs for exactly the duration that was predicted before drying began.
+    # The trained dynamic model is left in place and can be re-enabled with
+    # DYNAMIC_TIME_PREDICTION_ENABLED=true.
+    if not DYNAMIC_TIME_PREDICTION_ENABLED:
+        return _seeded_drying_time_response(active, elapsed)
+
     try:
         sensor = await fetch_live_reading()
     except SensorServiceUnavailableError:
@@ -607,9 +633,17 @@ async def active_overdrying_risk():
 
     assessment = overdrying_monitor_service.evaluate(batch_id, sensor)
 
+    # AUTO-STOP DISABLED (advisory mode).
+    #
+    # The oven now runs for the full pre-drying predicted duration and is
+    # stopped only by that duration elapsing (the oven's own
+    # duration_ends_at). Over-drying / overheating are reported as ALERTS
+    # only - this endpoint never commands a stop.
+    #
+    # To restore automatic stopping, set OVERDRYING_AUTO_STOP_ENABLED=true.
     stopped = False
     stop_error: str | None = None
-    if assessment["should_stop"]:
+    if assessment["should_stop"] and OVERDRYING_AUTO_STOP_ENABLED:
         try:
             await stop_oven(oven_session_id)
             stopped = True
@@ -621,6 +655,11 @@ async def active_overdrying_risk():
             # operator has to know the automatic stop did not land.
             stop_error = str(exc)
             logger.error("Auto-stop failed for batch %s: %s", batch_id, exc)
+    elif assessment["should_stop"]:
+        logger.warning(
+            "Over-drying risk HIGH for batch %s (%s) - auto-stop is disabled, "
+            "alerting only.", batch_id, assessment["stop_reason"],
+        )
 
     explanation = None
     if assessment["reasons"]:

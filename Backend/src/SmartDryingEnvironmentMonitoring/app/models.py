@@ -107,5 +107,6 @@ class DryingSession(BaseModel):
     fan_commanded: bool = False
     light_commanded: bool = False
     completion_event_emitted: bool = False
+    weight_alert_emitted: bool = False
     created_at: datetime
     updated_at: datetime

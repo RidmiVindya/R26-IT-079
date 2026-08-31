@@ -1,7 +1,7 @@
 """Batch-linked drying state machine and closed-loop actuator controller."""
 
 import math
-from datetime import timedelta
+from datetime import timedelta, timezone
 from threading import RLock
 
 from app.database import (
@@ -22,6 +22,7 @@ from app.settings import (
     TEMPERATURE_TOLERANCE_C,
     WEIGHT_INCREASE_TOLERANCE_FRACTION,
     WEIGHT_INCREASE_TOLERANCE_KG,
+    WEIGHT_COMPLETION_STOPS_RUN,
 )
 
 
@@ -139,6 +140,7 @@ class DryingController:
                 "fan_commanded": False,
                 "light_commanded": False,
                 "completion_event_emitted": False,
+                "weight_alert_emitted": False,
                 "created_at": now,
                 "updated_at": now,
             }
@@ -209,6 +211,7 @@ class DryingController:
                 "completed_at": None,
                 "cooling_ends_at": None,
                 "completion_event_emitted": False,
+                "weight_alert_emitted": False,
                 "heater_commanded": False,
                 "fan_commanded": False,
                 "light_commanded": False,
@@ -345,7 +348,7 @@ class DryingController:
             self._clear_sensor_failures(session["batch_id"])
 
             if session["mode"] == ControlMode.MANUAL.value:
-                if self._completion_weight_reached(session, reading):
+                if WEIGHT_COMPLETION_STOPS_RUN and self._completion_weight_reached(session, reading):
                     self._begin_completion(session, reading)
                 elif self._duration_reached(session):
                     self.stop(session["batch_id"], reason="duration_target_reached")
@@ -368,17 +371,50 @@ class DryingController:
                 self._fault(session, "Current batch weight exceeds captured initial weight")
                 return reading
 
-            if self._completion_weight_reached(session, reading) or self._duration_reached(session):
+            # Duration is the only terminator (see WEIGHT_COMPLETION_STOPS_RUN).
+            # Reaching the completion weight early is recorded as an event so
+            # the operator is alerted, but the run continues to full duration.
+            if self._duration_reached(session) or (
+                WEIGHT_COMPLETION_STOPS_RUN
+                and self._completion_weight_reached(session, reading)
+            ):
                 self._begin_completion(session, reading)
                 return reading
+            # NB: a dedicated flag, NOT completion_event_emitted - that one
+            # gates _begin_completion(), so reusing it here would permanently
+            # block the duration-based completion this mode depends on.
+            if (
+                not WEIGHT_COMPLETION_STOPS_RUN
+                and self._completion_weight_reached(session, reading)
+                and not session.get("weight_alert_emitted")
+            ):
+                update_session(session["batch_id"], weight_alert_emitted=True)
+                save_event(session["batch_id"], "WEIGHT_COMPLETION_REACHED", {
+                    "current_weight_kg": reading.get("weight"),
+                    "completion_weight_kg": session["completion_weight_kg"],
+                    "note": "alert only - run continues until predicted duration",
+                })
 
             if session["mode"] == ControlMode.AUTO.value:
                 self._automatic_control(session, reading)
             return reading
 
     @staticmethod
-    def _duration_reached(session: dict) -> bool:
-        duration_ends_at = session.get("duration_ends_at")
+    def _as_utc(value):
+        """Treat a stored datetime as UTC.
+
+        The Mongo client is tz_aware, but documents written before that was
+        set (and the in-memory fallback) can still hold naive datetimes.
+        Comparing one against tz-aware utcnow() raises TypeError and would
+        take the whole reading path down with a 500, so normalise instead.
+        """
+        if value is not None and value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
+
+    @classmethod
+    def _duration_reached(cls, session: dict) -> bool:
+        duration_ends_at = cls._as_utc(session.get("duration_ends_at"))
         return duration_ends_at is not None and utcnow() >= duration_ends_at
 
     def _completion_weight_reached(self, session: dict, reading: dict) -> bool:
@@ -485,7 +521,7 @@ class DryingController:
         })
 
     def _advance_cooling(self, session: dict) -> None:
-        cooling_ends_at = session.get("cooling_ends_at")
+        cooling_ends_at = self._as_utc(session.get("cooling_ends_at"))
         if cooling_ends_at and utcnow() < cooling_ends_at:
             return
         updated = self._apply_actuators(session, heater=False, fan=False, light=False)

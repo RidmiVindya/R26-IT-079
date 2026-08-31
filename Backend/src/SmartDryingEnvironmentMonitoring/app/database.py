@@ -22,7 +22,16 @@ alert_collection = None
 
 if MONGO_URI:
     try:
-        client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=2_000)
+        # tz_aware=True so datetimes read back from BSON keep their UTC
+        # offset. utcnow() below is timezone-aware, and the controller
+        # compares the two directly (duration_ends_at, cooling_ends_at);
+        # without this every such comparison raises TypeError on
+        # offset-naive vs offset-aware datetimes.
+        client = MongoClient(
+            MONGO_URI,
+            serverSelectionTimeoutMS=2_000,
+            tz_aware=True,
+        )
         db = client[MONGO_DB_NAME]
         sensor_collection = db["drying_sensor_logs"]
         session_collection = db["drying_sessions"]
@@ -126,7 +135,24 @@ def get_active_session() -> dict | None:
                         _sessions[candidate["batch_id"]] = deepcopy(record)
                 candidate = None
         except Exception as exc:
+            # Mongo is unreachable (Atlas election, DNS blip, offline). The
+            # cached entry cannot be confirmed - but if a stop/fault was
+            # recorded locally, the write that would have persisted it failed
+            # too, so the cache is the only place that knows. Trusting the
+            # stale active status here resurrects sessions that were already
+            # stopped and blocks every later batch. A locally-ended session
+            # is therefore treated as ended.
             print(f"MongoDB active-session verify failed: {exc}")
+            if candidate.get("stopped_at") or candidate.get("completed_at"):
+                with _lock:
+                    cached = _sessions.get(candidate["batch_id"])
+                    if cached is not None and (
+                        cached.get("stopped_at") or cached.get("completed_at")
+                    ):
+                        cached["status"] = (
+                            "COMPLETED" if cached.get("completed_at") else "STOPPED"
+                        )
+                candidate = None
 
     if candidate is not None:
         return candidate

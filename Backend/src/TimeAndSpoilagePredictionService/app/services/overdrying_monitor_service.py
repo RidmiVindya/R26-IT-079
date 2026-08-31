@@ -59,16 +59,31 @@ OVERHEAT_MARGIN_C = float(os.getenv("OVERHEAT_MARGIN_C", "10"))
 # "elevated" means.
 GAS_ELEVATED_VALUE = float(os.getenv("GAS_ELEVATED_VALUE", "300"))
 
+# Gas level treated as ABNORMAL for this chamber - high enough that the
+# operator should look at the batch.
+#
+# IMPORTANT: this is an assumed development threshold, not a calibrated
+# limit, and the sensor is an MQ-136 (hydrogen sulphide / spoilage gas).
+# It cannot detect smoke or burning - a raised value here means "unusual
+# gas", NOT "the batch is on fire". Detecting combustion would need a
+# smoke/CO sensor (MQ-2 / MQ-7) and a calibration run.
+#
+# Like the other signals it must hold for OVERDRY_LINGER_SECONDS, and it
+# only raises an alert - it never stops the oven.
+GAS_ABNORMAL_VALUE = float(os.getenv("GAS_ABNORMAL_VALUE", "350"))
+
 # batch_id -> when each condition first became true. Cleared when it stops
 # being true, or when the batch ends.
 _past_completion_since: dict[str, datetime] = {}
 _overheat_since: dict[str, datetime] = {}
+_gas_abnormal_since: dict[str, datetime] = {}
 
 
 def clear_state(batch_id: str) -> None:
     """Forget any in-progress timers for a batch (call when a run ends)."""
     _past_completion_since.pop(batch_id, None)
     _overheat_since.pop(batch_id, None)
+    _gas_abnormal_since.pop(batch_id, None)
 
 
 def _elapsed_since(store: dict[str, datetime], batch_id: str, now: datetime) -> float:
@@ -178,6 +193,32 @@ def evaluate(batch_id: str, sensor: dict[str, Any]) -> dict[str, Any]:
     else:
         _overheat_since.pop(batch_id, None)
 
+    # --- Signal 3: abnormal gas level -------------------------------------
+    # Alert only. See GAS_ABNORMAL_VALUE: this is an assumed threshold on an
+    # H2S sensor, so it flags "unusual gas", not combustion. Never stops.
+    gas_abnormal = (
+        isinstance(gas, (int, float)) and gas >= GAS_ABNORMAL_VALUE
+    )
+    if gas_abnormal:
+        held_for = _elapsed_since(_gas_abnormal_since, batch_id, now)
+        if held_for >= OVERDRY_LINGER_SECONDS:
+            if risk != "High":
+                risk = "High"
+            reasons.append(
+                f"Gas reading has stayed at {gas} (at or above the "
+                f"{GAS_ABNORMAL_VALUE:.0f} abnormal level) for {held_for:.0f}s. "
+                "Check the batch."
+            )
+        else:
+            if risk == "Low":
+                risk = "Medium"
+            reasons.append(
+                f"Gas reading is {gas}, at or above the "
+                f"{GAS_ABNORMAL_VALUE:.0f} abnormal level ({held_for:.0f}s so far)."
+            )
+    else:
+        _gas_abnormal_since.pop(batch_id, None)
+
     return {
         "risk": risk,
         "reasons": reasons,
@@ -190,5 +231,7 @@ def evaluate(batch_id: str, sensor: dict[str, Any]) -> dict[str, Any]:
             "temperature_c": temperature,
             "target_temperature_c": target_temperature,
             "gas": gas,
+            "gas_abnormal_value": GAS_ABNORMAL_VALUE,
+            "gas_abnormal": gas_abnormal,
         },
     }

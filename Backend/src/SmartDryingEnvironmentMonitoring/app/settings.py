@@ -44,3 +44,10 @@ WEIGHT_INCREASE_TOLERANCE_FRACTION = _float_setting(
 )
 SENSOR_SAVE_INTERVAL_SECONDS = _int_setting("SENSOR_SAVE_INTERVAL_SECONDS", 10)
 SENSOR_STALE_AFTER_SECONDS = _int_setting("SENSOR_STALE_AFTER_SECONDS", 30)
+
+# When False (the default), reaching the completion weight only raises a
+# WEIGHT_COMPLETION_REACHED alert; the run continues until the predicted
+# duration elapses. Duration is then the single terminator of a drying run.
+WEIGHT_COMPLETION_STOPS_RUN = os.getenv(
+    "WEIGHT_COMPLETION_STOPS_RUN", "false"
+).strip().lower() in ("1", "true", "yes")
