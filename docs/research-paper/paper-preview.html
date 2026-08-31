@@ -1,0 +1,722 @@
+<title>Smart Karawala Paper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --paper:#faf9f6; --surface:#ffffff; --ink:#1c2024; --ink-soft:#3c4249;
+    --muted:#5c6470; --line:#e4e0d6; --line-soft:#efece3;
+    --accent:#0b6b52; --accent-soft:#e7f0ec;
+    --ok:#1e7d4f; --warn:#b4842a; --gap:#a8402f;
+    --serif:"Spectral",Georgia,"Times New Roman",serif;
+    --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --paper:#14171a; --surface:#1b1f23; --ink:#e6e3db; --ink-soft:#c3c0b7;
+      --muted:#9aa0a8; --line:#2e3439; --line-soft:#242a2f;
+      --accent:#4bb596; --accent-soft:#1d2b28;
+      --ok:#5bbd85; --warn:#d6a24e; --gap:#d97a68;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#14171a; --surface:#1b1f23; --ink:#e6e3db; --ink-soft:#c3c0b7;
+    --muted:#9aa0a8; --line:#2e3439; --line-soft:#242a2f;
+    --accent:#4bb596; --accent-soft:#1d2b28;
+    --ok:#5bbd85; --warn:#d6a24e; --gap:#d97a68;
+  }
+  *{box-sizing:border-box;margin:0}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+  body{
+    background:var(--paper); color:var(--ink); font-family:var(--serif);
+    font-size:17px; line-height:1.62; -webkit-font-smoothing:antialiased;
+    padding:0 24px 120px;
+  }
+  .wrap{max-width:1140px; margin:0 auto}
+  @media (min-width:1080px){
+    .wrap{display:grid; grid-template-columns:210px minmax(0,760px); gap:56px;
+      justify-content:center}
+    .rail{position:sticky; top:0; align-self:start; height:100vh;
+      overflow-y:auto; padding:56px 0; border-right:1px solid var(--line-soft)}
+  }
+  .rail{display:none}
+  @media (min-width:1080px){.rail{display:block}}
+  .rail h2{font-family:var(--sans); font-size:11px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--muted); font-weight:600;
+    margin-bottom:14px}
+  .rail a{display:block; font-family:var(--sans); font-size:12.5px;
+    line-height:1.5; color:var(--ink-soft); text-decoration:none;
+    padding:3px 0 3px 10px; border-left:2px solid transparent;
+    transition:color .15s,border-color .15s}
+  .rail a:hover{color:var(--accent); border-color:var(--accent)}
+
+  main{padding:56px 0 0; min-width:0}
+  .eyebrow{font-family:var(--sans); font-size:11.5px; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--accent); font-weight:600}
+  h1{font-weight:600; font-size:30px; line-height:1.2; letter-spacing:-.01em;
+    text-wrap:balance; margin:14px 0 16px}
+  .byline{font-family:var(--sans); font-size:13px; color:var(--muted); line-height:1.7}
+  .byline strong{color:var(--ink-soft); font-weight:600}
+
+  .status-note{margin:24px 0 8px; padding:16px 18px; background:var(--surface);
+    border:1px solid var(--line); border-radius:8px;
+    font-family:var(--sans); font-size:13px; line-height:1.6; color:var(--ink-soft)}
+  .status-note b{color:var(--ink)}
+
+  h2.sec{font-weight:600; font-size:15px; font-family:var(--sans);
+    letter-spacing:.02em; text-transform:uppercase; color:var(--accent);
+    margin:52px 0 4px; padding-top:14px; border-top:1px solid var(--line)}
+  h2.sec .rn{color:var(--muted); margin-right:10px; font-variant-numeric:tabular-nums}
+  h3{font-weight:600; font-size:17px; margin:24px 0 6px; color:var(--ink)}
+  h4{font-family:var(--sans); font-weight:600; font-size:13.5px; margin:18px 0 4px;
+    color:var(--ink-soft)}
+  p{margin:10px 0; max-width:68ch}
+  em{font-style:italic}
+  a.ref{color:var(--accent); text-decoration:none; font-variant-numeric:tabular-nums}
+  a.ref:hover{text-decoration:underline}
+
+  .abstract{background:var(--accent-soft); border:1px solid var(--line);
+    border-radius:10px; padding:22px 24px; margin:24px 0}
+  .abstract h4{margin-top:0; color:var(--accent)}
+  .abstract p{max-width:none; font-size:15.5px; line-height:1.6}
+  .keywords{font-family:var(--sans); font-size:13px; color:var(--muted); margin-top:12px}
+  .keywords span{color:var(--ink-soft)}
+
+  .eq{font-family:var(--mono); font-size:13px; background:var(--surface);
+    border:1px solid var(--line); border-left:3px solid var(--accent);
+    border-radius:6px; padding:11px 15px; margin:13px 0; overflow-x:auto;
+    line-height:1.7; color:var(--ink-soft)}
+  .eq .n{float:right; color:var(--muted)}
+  code{font-family:var(--mono); font-size:.87em; background:var(--line-soft);
+    padding:1px 5px; border-radius:4px; color:var(--ink)}
+
+  figure{margin:26px 0; border:1px solid var(--line); border-radius:10px;
+    background:var(--surface); overflow:hidden}
+  figure svg{display:block; width:100%; height:auto; background:var(--surface)}
+  figcaption{font-family:var(--sans); font-size:12.5px; line-height:1.55;
+    color:var(--muted); padding:12px 18px; border-top:1px solid var(--line-soft)}
+  figcaption b{color:var(--ink-soft); font-weight:600}
+
+  .tbl-wrap{margin:24px 0; overflow-x:auto; border:1px solid var(--line); border-radius:10px}
+  table{border-collapse:collapse; width:100%; font-family:var(--sans); font-size:12.5px}
+  caption{caption-side:top; text-align:left; font-family:var(--sans); font-size:12px;
+    letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
+    font-weight:600; padding:14px 16px 4px}
+  th,td{text-align:left; padding:9px 14px; border-bottom:1px solid var(--line-soft);
+    vertical-align:top}
+  thead th{color:var(--ink-soft); font-weight:600; border-bottom:1px solid var(--line);
+    background:var(--line-soft)}
+  tbody tr:last-child td{border-bottom:none}
+  td.num{font-family:var(--mono); font-variant-numeric:tabular-nums; text-align:right}
+  .pill{display:inline-block; font-family:var(--sans); font-size:11px; font-weight:600;
+    padding:2px 8px; border-radius:20px; white-space:nowrap; line-height:1.5}
+  .p-ok{background:color-mix(in srgb,var(--ok) 16%,transparent); color:var(--ok)}
+  .p-warn{background:color-mix(in srgb,var(--warn) 18%,transparent); color:var(--warn)}
+  .tfoot{font-family:var(--sans); font-size:11.5px; color:var(--muted);
+    padding:10px 16px; line-height:1.5}
+
+  ol.refs{margin:14px 0; padding-left:0; list-style:none; counter-reset:r}
+  ol.refs li{counter-increment:r; position:relative; padding-left:38px; margin:9px 0;
+    font-size:13.5px; line-height:1.5; color:var(--ink-soft); max-width:70ch}
+  ol.refs li::before{content:"["counter(r)"]"; position:absolute; left:0;
+    font-family:var(--mono); font-size:12px; color:var(--muted)}
+  ol.refs i{font-style:italic; color:var(--ink)}
+
+  .foot{margin-top:60px; padding-top:20px; border-top:1px solid var(--line);
+    font-family:var(--sans); font-size:12px; color:var(--muted); line-height:1.6}
+</style>
+
+<div class="wrap">
+  <nav class="rail">
+    <h2>Contents</h2>
+    <a href="#abs">Abstract</a>
+    <a href="#s1">I&nbsp;&nbsp;Introduction</a>
+    <a href="#s2">II&nbsp;&nbsp;Related Work</a>
+    <a href="#s3">III&nbsp;&nbsp;Integrated Framework</a>
+    <a href="#s4">IV&nbsp;&nbsp;Monitoring &amp; Prediction</a>
+    <a href="#s5">V&nbsp;&nbsp;Decision, Control, Traceability</a>
+    <a href="#s6">VI&nbsp;&nbsp;Implementation &amp; Method</a>
+    <a href="#s7">VII&nbsp;&nbsp;Results &amp; Discussion</a>
+    <a href="#s8">VIII&nbsp;&nbsp;Limitations &amp; Future Work</a>
+    <a href="#s9">IX&nbsp;&nbsp;Conclusion</a>
+    <a href="#refs">References</a>
+  </nav>
+
+  <main>
+    <p class="eyebrow">IEEE Conference Manuscript &middot; Review Draft (v2)</p>
+    <h1>Smart Karawala: A Batch-Centric AI&ndash;IoT Framework for Predictive and Automated Dry-Fish Processing</h1>
+    <p class="byline">
+      <strong>L. B. R. V. Vivipem</strong>, <strong>E. W. M. Sanjaya</strong>,
+      <strong>G. A. K. J. Peshala</strong>, <strong>D. T. C. D. P. Gunasekara</strong>,
+      and supervisors<br>
+      Department of Information Technology, SLIIT, Malabe, Sri Lanka
+    </p>
+
+    <div class="status-note">
+      <b>Revision note.</b> v2 addresses the compile review: shorter title and
+      author block; <code>\label{fig3}</code> added so the Fig.&nbsp;3 reference
+      resolves; pre-drying metrics split by target; &ldquo;cross-validated&rdquo;
+      status wording (not &ldquo;CV&rdquo;); modelled-dataset qualifier repeated at
+      every metric; completion stated as two OR criteria; actuator-acknowledgement
+      gap surfaced in the control section; Related Work and Conclusion trimmed;
+      microservices textbook reference removed. Target length &le;&nbsp;6 IEEE pages.
+      Source: <code>smart_karawala_paper.tex</code>.
+    </div>
+
+    <section id="abs">
+      <div class="abstract">
+        <h4>Abstract</h4>
+        <p>Small-scale dry-fish processing in Sri Lanka depends on operator
+        experience and open-air drying, producing inconsistent quality, spoilage
+        risk, and fragmented batch histories. Existing work treats environmental
+        monitoring, machine-learning drying prediction, process control, and
+        traceability as separate functions, and rarely returns a prediction to the
+        drying equipment as an operating set-point. This paper presents Smart
+        Karawala, a batch-centric Artificial Intelligence (AI) and Internet of
+        Things (IoT) framework that links these functions in one processing
+        lifecycle. A unique batch identifier ties preparation data, continuous
+        temperature, humidity, gas and weight sensing, machine-learning prediction
+        of the drying temperature and duration, rule-based spoilage- and
+        over-drying-risk assessment, automated drying control, and sustainability
+        records. A two-phase start protocol turns the predicted parameters into the
+        chamber's control profile and records a batch as drying only after the
+        chamber confirms a valid sensor state, and an independent safety layer
+        clamps every set-point and can stop the heater regardless of the model. On a
+        physics-informed modelled drying dataset the remaining-time regressor
+        reached a grouped cross-validated coefficient of determination of 0.96 (mean
+        absolute error 1.1&nbsp;min). We report the integration status of each
+        subsystem and the field experiments still required.</p>
+        <p class="keywords"><span>Index Terms &mdash;</span> artificial intelligence,
+        cyber-physical systems, dry-fish processing, Internet of Things, machine
+        learning, process control, traceability</p>
+      </div>
+    </section>
+
+    <h2 class="sec" id="s1"><span class="rn">I</span>Introduction</h2>
+    <p>Drying preserves food by reducing available moisture, suppressing microbial
+    and enzymatic activity. In Sri Lanka roughly a quarter of the marine fish
+    harvest is dried, and dried fish (<em>karawala</em>) supports coastal
+    livelihoods; reported post-harvest quality losses in the sector are high, and
+    open-sun drying is associated with spoilage, contamination, and
+    weather-dependent inconsistency <a class="ref" href="#refs">[12]</a>. Processing
+    remains manual: operators judge cleaning losses, salt quantity, salting
+    duration, drying conditions, and final dryness from experience, while open yards
+    expose the batch to changing temperature and humidity.</p>
+    <p>IoT, machine learning (ML), and closed-loop control can replace
+    experience-dependent judgement with data-driven workflows, but implemented in
+    isolation their combined value is limited. A drying-time estimate is more useful
+    when continuously updated from live readings; a control decision is more
+    defensible when its evidence is retained against the batch record. A recent
+    review identifies closed-loop integration of sensing, prediction, and control as
+    an open direction <a class="ref" href="#refs">[3]</a>.</p>
+    <p>This paper presents <em>Smart Karawala</em>, which treats preparation,
+    sensing, prediction, control, verification, and traceability as stages of one
+    lifecycle. A batch is observed through</p>
+    <div class="eq">X(t) = [ T(t), H(t), W(t), G(t), B ]<span class="n">(1)</span></div>
+    <p>where <em>T, H, W, G</em> are chamber temperature, relative humidity, batch
+    weight, and a gas/odour signal, and <em>B</em> is batch preparation data. These
+    support</p>
+    <div class="eq">Y(t) = [ &theta;&#770;, R&#770;&#8320;, R&#770;(t), P_s(t), U(t), D(t) ]<span class="n">(2)</span></div>
+    <p>where <em>&theta;&#770;</em> is the recommended chamber temperature,
+    <em>R&#770;&#8320;</em> the predicted total drying time, <em>R&#770;(t)</em> the
+    re-estimated remaining time, <em>P_s(t)</em> a spoilage-risk level, <em>U(t)</em>
+    control actions, and <em>D(t)</em> the completion state.</p>
+    <h4>Contribution</h4>
+    <p>The central contribution is a batch-centric cyber-physical architecture that
+    passes ML drying predictions into an IoT-controlled drying chamber while an
+    independent safety layer can override the predictive path, and retains every
+    decision as an event-level batch history. Secondary contributions: (i) a
+    two-phase prediction-to-control handoff in which a batch is recorded as drying
+    only after the chamber independently confirms a valid sensor state; (ii)
+    grouped-cross-validated remaining-time prediction; (iii) sensor-fault and
+    over-drying protection independent of model output; and (iv) a reported
+    integration failure mode &mdash; a service holding a <em>logical</em> record of
+    drying must not be treated as authoritative about whether drying is
+    <em>physically</em> occurring. The research question is whether integrating
+    heterogeneous sensing, prediction, and automated control provides a coherent,
+    safe framework for digitising small-scale dry-fish processing.</p>
+
+    <h2 class="sec" id="s2"><span class="rn">II</span>Related Work</h2>
+    <p><strong>IoT and drying control.</strong> Mishra <em>et al.</em>
+    <a class="ref" href="#refs">[1]</a> showed that real-time measurement and
+    actuation stabilise food drying; Alvinika <em>et al.</em>
+    <a class="ref" href="#refs">[2]</a> regulated a fish-drying chamber from
+    temperature and humidity with fuzzy logic on low-cost hardware. Such systems
+    measure the drying <em>environment</em> rather than the product state, and many
+    remain reactive <a class="ref" href="#refs">[3]</a>.</p>
+    <p><strong>ML for drying prediction.</strong> For an observation sequence
+    <em>X</em><sub>1:t</sub>, a regressor estimates the remaining time as
+    <em>R&#770;<sub>t</sub></em> = <em>f</em>(<em>X</em><sub>1:t</sub>). Rakholia
+    <em>et al.</em> <a class="ref" href="#refs">[4]</a> predicted meat drying time
+    from process history for production planning; Ahmad <em>et al.</em>
+    <a class="ref" href="#refs">[5]</a> estimated grain moisture from environmental
+    parameters. Thin-layer models remain the physical baseline; Ghanem
+    <em>et al.</em> <a class="ref" href="#refs">[6]</a> fitted them to solar-dried
+    salted tilapia with close agreement to measured moisture ratios. Predictions are
+    typically advisory, and few systems return a predicted parameter to the
+    equipment as a control set-point.</p>
+    <p><strong>Freshness sensing and traceability.</strong> Setyagraha
+    <em>et al.</em> <a class="ref" href="#refs">[8]</a> discriminated seafood
+    freshness with low-cost metal-oxide gas sensors and ML classifiers, supporting
+    an inexpensive gas sensor as an odour proxy. Cromwell <em>et al.</em>
+    <a class="ref" href="#refs">[10]</a> reviewed digital fish traceability and
+    identified integration as a prerequisite for higher traceability levels; Tsang
+    <em>et al.</em> <a class="ref" href="#refs">[11]</a> demonstrated a
+    blockchain&ndash;IoT architecture for perishable-food traceability. This work
+    concentrates on catch and distribution, treating processing as one opaque
+    event.</p>
+    <p><strong>Research gap.</strong> Each function above contributes individually.
+    Predictive models are usually evaluated in isolation rather than used to set
+    equipment parameters; drying temperature is usually a fixed operator input
+    rather than a predicted quantity; and traceability research records supply-chain
+    custody rather than the decisions taken <em>during</em> processing.</p>
+
+    <h2 class="sec" id="s3"><span class="rn">III</span>Proposed Integrated Framework</h2>
+    <h3>Architecture and Batch-Centric Data Model</h3>
+    <p>Smart Karawala is organised around the lifecycle of one batch (Fig.&nbsp;1).
+    It comprises four loosely coupled services over HTTP with a document store, plus
+    a cross-platform mobile application: an authentication service; a batch and
+    sustainability service that owns batch data, cleaning-loss and salt estimation,
+    salting progression, waste records, and traceability reporting; an
+    environmental-monitoring service that runs the drying-chamber state machine and
+    actuator control at the edge; and a predictive-analytics service that produces
+    the ML predictions and rule-based risk assessments and orchestrates drying. Each
+    batch has a record</p>
+    <div class="eq">B_i = { P_i, E_i, W_i, A_i, S_i, T_i }<span class="n">(3)</span></div>
+    <p>with preparation data <em>P<sub>i</sub></em>, environmental observations
+    <em>E<sub>i</sub></em>, weight progression <em>W<sub>i</sub></em>, analytical
+    outputs <em>A<sub>i</sub></em>, sustainability data <em>S<sub>i</sub></em>, and
+    processing/traceability events <em>T<sub>i</sub></em>. The analytics service
+    reads batch data and live readings only over the other services' public
+    interfaces, so no service touches another's database.</p>
+    <h3>End-to-End Workflow</h3>
+    <p>The framework follows a
+    <em>sense&ndash;predict&ndash;decide&ndash;control&ndash;verify&ndash;trace</em>
+    cycle (Fig.&nbsp;2). A batch is created with its variety and raw weight;
+    cleaning loss and salt requirement are estimated and the batch is salted, with
+    drying gated until salting is recorded complete. Before drying, the analytics
+    service predicts the recommended temperature and total time; those values are
+    registered with the chamber as a control profile; the chamber validates its own
+    sensors and starts; only then does the analytics service record the batch as the
+    single active drying batch. During drying, a periodic loop pulls the latest
+    reading, re-estimates the remaining time, evaluates spoilage and over-drying
+    risk, and &mdash; at high over-drying risk &mdash; stops the heater. Completion
+    is detected from weight and elapsed time, the chamber runs a cooling phase, and
+    every significant event is written against the batch identifier.</p>
+
+    <figure>
+      <svg viewBox="0 0 760 470" xmlns="http://www.w3.org/2000/svg" font-family="'IBM Plex Sans',sans-serif">
+        <defs>
+          <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#5c6470"/></marker>
+          <marker id="as" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#a8402f"/></marker>
+        </defs>
+        <rect width="760" height="470" fill="#ffffff"/>
+        <rect x="24" y="20" width="712" height="44" rx="7" fill="#455A64"/>
+        <text x="380" y="47" fill="#fff" font-size="13" font-weight="700" text-anchor="middle">Mobile Operator Application</text>
+
+        <rect x="24" y="104" width="356" height="176" rx="8" fill="#6A1B9A"/>
+        <text x="202" y="124" fill="#fff" font-size="12.5" font-weight="700" text-anchor="middle">Predictive Analytics Service</text>
+        <g font-size="11" fill="#fff" text-anchor="middle">
+          <rect x="40" y="134" width="156" height="42" rx="5" fill="#8E24AA"/><text x="118" y="152">Pre-drying</text><text x="118" y="166">prediction (ML)</text>
+          <rect x="206" y="134" width="158" height="42" rx="5" fill="#8E24AA"/><text x="285" y="152">Dynamic remaining</text><text x="285" y="166">time (ML)</text>
+          <rect x="40" y="184" width="156" height="42" rx="5" fill="#8E24AA"/><text x="118" y="209">Spoilage-risk rule</text>
+          <rect x="206" y="184" width="158" height="42" rx="5" fill="#C62828"/><text x="285" y="209">Over-drying auto-stop</text>
+          <rect x="40" y="234" width="324" height="34" rx="5" fill="#C62828"/><text x="202" y="255">Safety clamp + orchestration</text>
+        </g>
+
+        <rect x="404" y="104" width="332" height="176" rx="8" fill="#EF6C00"/>
+        <text x="570" y="124" fill="#fff" font-size="12.5" font-weight="700" text-anchor="middle">Batch &amp; Sustainability Service</text>
+        <g font-size="11" fill="#fff" text-anchor="middle">
+          <rect x="420" y="134" width="300" height="42" rx="5" fill="#F57C00"/><text x="570" y="159">Batch record (fish, weights, salt)</text>
+          <rect x="420" y="184" width="145" height="42" rx="5" fill="#F57C00"/><text x="492" y="209">Waste / salt est.</text>
+          <rect x="575" y="184" width="145" height="42" rx="5" fill="#F57C00"/><text x="647" y="209">Traceability</text>
+          <rect x="420" y="234" width="300" height="34" rx="5" fill="#F57C00"/><text x="570" y="255">Recycler notification</text>
+        </g>
+
+        <rect x="24" y="312" width="712" height="96" rx="8" fill="#1565C0"/>
+        <text x="360" y="332" fill="#fff" font-size="12.5" font-weight="700" text-anchor="middle">Environmental Monitoring Service (edge)</text>
+        <g font-size="11" fill="#fff" text-anchor="middle">
+          <rect x="40" y="342" width="160" height="34" rx="5" fill="#1976D2"/><text x="120" y="363">Drying state machine</text>
+          <rect x="210" y="342" width="160" height="34" rx="5" fill="#1976D2"/><text x="290" y="363">AUTO control</text>
+          <rect x="380" y="342" width="150" height="34" rx="5" fill="#C62828"/><text x="455" y="363">Sensor validate</text>
+          <rect x="540" y="342" width="180" height="34" rx="5" fill="#1976D2"/><text x="630" y="363">Alerts + event log</text>
+          <rect x="40" y="382" width="680" height="20" rx="4" fill="#1976D2"/><text x="380" y="396" font-size="10">serial link &middot; actuator protocol &middot; mock-sensor mode</text>
+        </g>
+        <rect x="666" y="312" width="70" height="96" rx="8" fill="#455A64"/>
+        <text x="701" y="356" fill="#fff" font-size="11" font-weight="600" text-anchor="middle">Auth</text>
+        <text x="701" y="370" fill="#fff" font-size="11" font-weight="600" text-anchor="middle">Svc</text>
+
+        <rect x="24" y="426" width="470" height="34" rx="8" fill="#2E7D32"/>
+        <text x="259" y="447" fill="#fff" font-size="10.5" text-anchor="middle">Drying Chamber: temp/humidity &middot; probe &middot; gas &middot; load cell &middot; relays</text>
+        <rect x="510" y="426" width="226" height="34" rx="8" fill="#1e7d4f"/>
+        <text x="623" y="447" fill="#fff" font-size="11" font-weight="600" text-anchor="middle">Heater / Fan / Light</text>
+
+        <line x1="202" y1="64" x2="202" y2="104" stroke="#5c6470" stroke-width="1.4" marker-end="url(#a)"/>
+        <line x1="400" y1="104" x2="400" y2="64" stroke="#5c6470" stroke-width="1.4" marker-end="url(#a)"/>
+        <line x1="380" y1="192" x2="404" y2="192" stroke="#5c6470" stroke-width="1.4" marker-end="url(#a)"/>
+        <line x1="200" y1="280" x2="200" y2="312" stroke="#5c6470" stroke-width="1.4" marker-end="url(#a)"/>
+        <text x="248" y="300" font-size="9" fill="#5c6470" font-style="italic" text-anchor="middle">HTTP API</text>
+        <line x1="320" y1="268" x2="320" y2="312" stroke="#a8402f" stroke-width="1.8" marker-end="url(#as)"/>
+        <text x="360" y="292" font-size="9" fill="#a8402f" font-style="italic" text-anchor="middle">stop (safety)</text>
+        <line x1="160" y1="408" x2="160" y2="426" stroke="#5c6470" stroke-width="1.4" marker-end="url(#a)"/>
+        <line x1="494" y1="443" x2="510" y2="443" stroke="#5c6470" stroke-width="1.4" marker-end="url(#a)"/>
+        <line x1="701" y1="312" x2="701" y2="64" stroke="#90A4AE" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#a)"/>
+      </svg>
+      <figcaption><b>Fig. 1.</b> System architecture. The monitoring service holds
+      the edge controller, sensors, and relays; the analytics service holds the ML
+      predictors and the safety and orchestration logic; the batch service owns the
+      batch record. Solid arrows are HTTP calls; the safety auto-stop path is
+      highlighted.</figcaption>
+    </figure>
+
+    <figure>
+      <svg viewBox="0 0 760 330" xmlns="http://www.w3.org/2000/svg" font-family="'IBM Plex Sans',sans-serif">
+        <defs><marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#5c6470"/></marker></defs>
+        <rect width="760" height="330" fill="#ffffff"/>
+        <g font-size="9.5" fill="#fff" text-anchor="middle">
+          <rect x="14" y="20" width="98" height="46" rx="6" fill="#EF6C00"/><text x="63" y="40">Create batch</text><text x="63" y="53">(fish, raw wt)</text>
+          <rect x="122" y="20" width="98" height="46" rx="6" fill="#EF6C00"/><text x="171" y="40">Estimate</text><text x="171" y="53">waste + salt</text>
+          <rect x="230" y="20" width="98" height="46" rx="6" fill="#EF6C00"/><text x="279" y="40">Salt batch;</text><text x="279" y="53">drying gated</text>
+          <rect x="338" y="20" width="102" height="46" rx="6" fill="#6A1B9A"/><text x="389" y="40">Predict temp</text><text x="389" y="53">+ time (ML)</text>
+          <rect x="450" y="20" width="98" height="46" rx="6" fill="#1565C0"/><text x="499" y="40">Register</text><text x="499" y="53">ctrl profile</text>
+          <rect x="558" y="20" width="106" height="46" rx="6" fill="#2E7D32"/><text x="611" y="37">Chamber</text><text x="611" y="49">validates &rarr;</text><text x="611" y="61">START</text>
+          <rect x="674" y="20" width="92" height="46" rx="6" fill="#6A1B9A"/><text x="720" y="40">Record</text><text x="720" y="53">active batch</text>
+        </g>
+        <g stroke="#5c6470" stroke-width="1.3" marker-end="url(#b)">
+          <line x1="112" y1="43" x2="122" y2="43"/><line x1="220" y1="43" x2="230" y2="43"/><line x1="328" y1="43" x2="338" y2="43"/>
+          <line x1="440" y1="43" x2="450" y2="43"/><line x1="548" y1="43" x2="558" y2="43"/><line x1="664" y1="43" x2="674" y2="43"/>
+        </g>
+        <rect x="14" y="110" width="740" height="96" rx="8" fill="#eef1ee" stroke="#78909C"/>
+        <text x="384" y="126" font-size="9.5" font-style="italic" fill="#37474F" text-anchor="middle">Periodic drying loop (repeats while DRYING)</text>
+        <g font-size="9.5" fill="#fff" text-anchor="middle">
+          <rect x="40" y="138" width="152" height="50" rx="6" fill="#1565C0"/><text x="116" y="167">Read sensors</text>
+          <rect x="222" y="138" width="152" height="50" rx="6" fill="#6A1B9A"/><text x="298" y="160">Re-estimate</text><text x="298" y="173">remaining time (ML)</text>
+          <rect x="404" y="138" width="152" height="50" rx="6" fill="#6A1B9A"/><text x="480" y="160">Assess spoilage /</text><text x="480" y="173">over-drying (rule)</text>
+          <rect x="586" y="138" width="152" height="50" rx="6" fill="#C62828"/><text x="662" y="160">Control heater/fan;</text><text x="662" y="173">auto-stop if HIGH</text>
+        </g>
+        <g stroke="#5c6470" stroke-width="1.3" marker-end="url(#b)">
+          <line x1="192" y1="163" x2="222" y2="163"/><line x1="374" y1="163" x2="404" y2="163"/><line x1="556" y1="163" x2="586" y2="163"/>
+          <line x1="384" y1="66" x2="384" y2="110"/>
+        </g>
+        <path d="M704 188 q40 24 40 -30 v-32" fill="none" stroke="#5c6470" stroke-width="1.3" stroke-dasharray="3 2" marker-end="url(#b)"/>
+        <g font-size="9.5" fill="#fff" text-anchor="middle">
+          <rect x="130" y="250" width="152" height="50" rx="6" fill="#2E7D32"/><text x="206" y="272">Completion:</text><text x="206" y="285">weight OR duration</text>
+          <rect x="307" y="250" width="152" height="50" rx="6" fill="#2E7D32"/><text x="383" y="279">Cooling &rarr; COMPLETED</text>
+          <rect x="484" y="250" width="160" height="50" rx="6" fill="#EF6C00"/><text x="564" y="272">Waste record +</text><text x="564" y="285">batch history</text>
+        </g>
+        <g stroke="#5c6470" stroke-width="1.3" marker-end="url(#b)">
+          <line x1="282" y1="275" x2="307" y2="275"/><line x1="459" y1="275" x2="484" y2="275"/><line x1="70" y1="206" x2="150" y2="250"/>
+        </g>
+      </svg>
+      <figcaption><b>Fig. 2.</b> End-to-end batch workflow: creation, salting, the
+      two-phase drying start, the periodic drying loop, completion verification, and
+      the batch event history.</figcaption>
+    </figure>
+
+    <h2 class="sec" id="s4"><span class="rn">IV</span>Monitoring and Predictive Processing</h2>
+    <h3>Environmental and Physical Sensing</h3>
+    <p>An edge microcontroller streams a periodic sensor block over a serial link
+    from a temperature/humidity sensor, a temperature probe, a metal-oxide gas
+    sensor, and a load cell with a signal-conditioning amplifier. Malformed lines
+    are rejected, and a reading drives control only when every required field is
+    present and physically plausible. The environmental state is
+    <em>E<sub>t</sub></em> = [<em>T<sub>t</sub></em>, <em>H<sub>t</sub></em>], with a
+    safe operating condition</p>
+    <div class="eq">C_E(t) = 1 &nbsp;if&nbsp; T_min &le; T_t &le; T_max &and; H_t &le; H_max ; &nbsp; else 0<span class="n">(4)</span></div>
+    <p>A software-simulation mode reproduces the sensor block in the device format,
+    so the full system runs without hardware for development.</p>
+    <h3>Weight Progression</h3>
+    <p>From the captured initial weight <em>W<sub>0</sub></em>,</p>
+    <div class="eq">R_W(t) = W_t/W_0 &nbsp;;&nbsp; L_W(t) = (W_0&minus;W_t)/W_0 &times; 100 &nbsp;;&nbsp; r_W(t) = (W_{t&minus;&Delta;t}&minus;W_t)/&Delta;t<span class="n">(5)</span></div>
+    <p>Because both time predictors and the completion check share this signal, the
+    analytics service applies a reliability gate: the weight-loss rate is used only
+    once enough time has passed and enough mass lost for the ratio to clear sensor
+    noise; until then the pre-drying estimate is shown.</p>
+    <h3>Gas Sensing</h3>
+    <p>The metal-oxide gas sensor gives an odour-related signal linked to volatiles
+    from protein degradation. Its raw reading is mapped to discrete smell levels
+    using configurable prototype thresholds; consistent with
+    <a class="ref" href="#refs">[8]</a>, it is treated as an uncalibrated odour
+    proxy, not a direct spoilage measurement.</p>
+    <h3>Pre-Drying Parameter Prediction</h3>
+    <p>Before drying, the system predicts the recommended chamber temperature and
+    total drying time from conditions known in advance,</p>
+    <div class="eq">[ &theta;&#770;, R&#770;&#8320; ] = f_&phi;( variety, W_0, H_0, G_0 )<span class="n">(6)</span></div>
+    <p>Here temperature is itself predicted and in turn shapes the expected
+    duration, unlike approaches that fix temperature as an operator input. The
+    predictor is a multi-output regression ensemble, selected by cross-validation.
+    Where a live reading is unavailable, a documented default is substituted and the
+    result marked.</p>
+    <h3>Dynamic Remaining-Time Prediction</h3>
+    <p>During drying, the feature vector is</p>
+    <div class="eq">Z_t = [ variety, W_0, W_t, T_t, H_t, &tau;_t, r_W(t) ] &nbsp;;&nbsp; R&#770;_t = f_&theta;( Z_t )<span class="n">(7)</span></div>
+    <p>with elapsed drying time <em>&tau;<sub>t</sub></em>. The prediction is
+    refreshed periodically; the client applies a short rolling average and permits an
+    upward correction only past a tolerance, so the displayed countdown stays steady
+    under noise.</p>
+    <h3>Rule-Based Spoilage-Risk Assessment</h3>
+    <p>Spoilage risk is a transparent weighted rule over the odour level, humidity,
+    temperature, and stalled weight loss:</p>
+    <div class="eq">s = &Sigma;_k w_k &middot; 1[ c_k ] &nbsp;;&nbsp; P_s = &Phi;(s) &isin; { Low, Medium, High }<span class="n">(8)</span></div>
+    <p>where each <em>c<sub>k</sub></em> is a threshold condition, <em>w<sub>k</sub></em>
+    its weight, and <em>&Phi;</em> maps <em>s</em> to Low/Medium/High. The interface
+    reports each contributing reading with its value, expected range, and direction
+    of influence. This is a rule-based risk assessment, not a trained classifier; a
+    learned classifier is future work, pending labelled spoilage ground truth.</p>
+    <h3>Sustainability Estimation</h3>
+    <p>At batch creation the platform estimates expected cleaning waste and the
+    required salt quantity and salting duration from per-variety coefficients,
+    storing them against the batch. Salting progress is estimated from elapsed time
+    against the recommended duration. A recorded waste event is
+    <em>W<sub>e</sub></em> = {type, quantity, time, method, <em>BID</em>}, and a
+    recycler-collection message is composed and stored with the batch.</p>
+
+    <h2 class="sec" id="s5"><span class="rn">V</span>Decision, Control, and Traceability</h2>
+    <h3>Automated Drying Control</h3>
+    <p>The chamber runs a state machine <code>READY</code>&rarr;<code>DRYING</code>%
+    &rarr;<code>COOLING</code>&rarr;<code>COMPLETED</code>, plus <code>STOPPED</code>
+    and <code>FAULT</code>. In automatic mode the heater switches with fixed
+    hysteresis about the target temperature and the exhaust fan responds to the
+    humidity target; <em>U<sub>t</sub></em> = &pi;(<em>S<sub>t</sub></em>,
+    <em>E<sub>t</sub></em>) yields heater activation, fan activation, continuation,
+    protective intervention, or termination. Temperature and humidity feedback
+    influence subsequent commands, so control is closed-loop at the controller
+    level; physical actuator acknowledgement is not yet read back (Section&nbsp;VI).</p>
+    <h3>Independent Safety Layer</h3>
+    <p>Two properties are enforced independently of the ML path. Every recommended
+    temperature is clamped before it can reach the controller,</p>
+    <div class="eq">&theta;_safe = min( max( &theta;&#770;, T_min ), T_max )<span class="n">(9)</span></div>
+    <p>applied in the analytics service, again at drying start, and again on the
+    client; this bound is correct by construction &mdash; an out-of-range value
+    cannot be forwarded. Independently, the chamber faults and de-energises the
+    heater after a bounded number of consecutive missing or implausible readings, on
+    a weight increase beyond a noise allowance, and on any service restart; a heating
+    session is never silently resumed. A debounced check raises over-drying risk
+    when the batch is at or past target dryness while still heated, or when the
+    chamber runs sustainedly above target, and at high risk the analytics service
+    commands a stop. Only the set-point bound is guaranteed by construction; overall
+    safety still depends on sensor, relay, firmware, and communication correctness.</p>
+    <h3>Completion Criteria</h3>
+    <p>The prototype evaluates two independent completion criteria,</p>
+    <div class="eq">D_t = 1[ W_t &le; W_0/k &nbsp; &or; &nbsp; &tau;_t &ge; R&#770;&#8320; ]<span class="n">(10)</span></div>
+    <p>one from weight reduction (with a configurable completion ratio <em>k</em>)
+    and one from elapsed predicted duration as a prototype fallback. On completion
+    the heater is turned off and the exhaust fan runs for a configured cooling period
+    before the batch is marked complete. The weight-loss criterion is a configurable
+    prototype parameter, not an established standard, and requires per-variety
+    validation.</p>
+    <h3>Device-Authoritative State Reconciliation</h3>
+    <p>Prototype operation exposed a cyber-physical failure mode. The analytics
+    service and the chamber held separate notions of whether drying was occurring:
+    when the chamber halted through a safety fault or lost link, the analytics
+    service still reported an active batch and the interface continued a countdown
+    from the pre-drying estimate &mdash; internally consistent yet physically false.
+    The resolution makes the chamber authoritative: the client reads the chamber's
+    live session status, suspends the countdown, and explains the discrepancy when
+    the two disagree. A service holding a logical record of an activity must not be
+    permitted to assert that the activity is physically occurring.</p>
+    <h3>Event-Level Traceability</h3>
+    <p>Each event is stored as <em>T<sub>k</sub></em> = (<em>BID</em>,
+    <em>t<sub>k</sub></em>, <em>type<sub>k</sub></em>, <em>value<sub>k</sub></em>,
+    <em>source<sub>k</sub></em>), spanning batch creation, cleaning-loss and salt
+    estimation, salting start/completion, control-profile receipt, drying start,
+    actuator commands, missed-sensor and fault events, weight- and drying-completion,
+    predictions, risk assessments, and the waste record. Completeness is
+    <em>TC</em> = (<em>N<sub>recorded</sub></em> / <em>N<sub>expected</sub></em>)
+    &times; 100. The aim is a digital history of <em>how</em> a batch was processed,
+    not only where it originated.</p>
+
+    <h2 class="sec" id="s6"><span class="rn">VI</span>Implementation and Experimental Methodology</h2>
+    <p>The four services use a Python asynchronous web framework with a document
+    store and an in-memory fallback so control decisions survive a database outage.
+    ML predictors use a standard gradient-boosting/random-forest library. The edge
+    controller drives the chamber over a serial link with a single-character command
+    protocol; it confirms bytes were written but does not yet read back the relay
+    state, so control is commanded but not actuator-acknowledged. The mobile
+    application shows the active batch: live readings, progression, predicted
+    remaining time, risk with a per-factor breakdown, actuator status, alerts, and
+    history. The drying start is the two-phase operation of Section&nbsp;III.</p>
+    <p>The two drying-time models were trained on a physics-informed modelled drying
+    dataset of 3,000 pre-drying cases and 2,767 in-process observations across 420
+    drying profiles spanning twelve fish varieties; feature values and drying-time
+    targets follow thin-layer hot-air drying theory
+    <a class="ref" href="#refs">[6]</a> anchored to measured oven runs. Because
+    observations within one drying profile are strongly autocorrelated, the dynamic
+    model uses five-fold <em>grouped</em> cross-validation with each profile assigned
+    wholly to one fold; the pre-drying model, whose rows are independent batches,
+    uses standard five-fold cross-validation. Three candidate regressors were
+    compared per task &mdash; linear regression, random forest
+    <a class="ref" href="#refs">[9]</a>, and gradient boosting
+    <a class="ref" href="#refs">[7]</a>. Regression is scored with
+    <em>R</em><sup>2</sup>, and</p>
+    <div class="eq">MAE = (1/N) &Sigma; |y_i &minus; y&#770;_i| &nbsp;;&nbsp; RMSE = &radic;[ (1/N) &Sigma; (y_i &minus; y&#770;_i)&sup2; ]<span class="n">(11)</span></div>
+    <p>No baseline comparison against conventional operator-managed drying has been
+    conducted.</p>
+
+    <h2 class="sec" id="s7"><span class="rn">VII</span>Results and Discussion</h2>
+    <h3>Predictive Model Performance</h3>
+    <p>Table&nbsp;I reports the cross-validated performance of the retained models.
+    For dynamic remaining-time prediction, under grouped cross-validation on the
+    modelled dataset the random forest achieved <em>R</em><sup>2</sup> = 0.956
+    &plusmn; 0.006 with a mean absolute error of 1.10&nbsp;min and an RMSE of
+    1.50&nbsp;min, ahead of gradient boosting and linear regression.
+    Fig.&nbsp;3 shows predicted versus actual remaining time on the out-of-fold
+    predictions, distributed close to the identity line across the operating range.
+    For pre-drying prediction, the total-drying-time target was recovered well
+    (<em>R</em><sup>2</sup> = 0.92, MAE 1.4&nbsp;min), whereas the recommended
+    temperature was only moderately predictable (<em>R</em><sup>2</sup> &asymp; 0.57,
+    MAE 3.5&nbsp;&deg;C): the training temperatures carry operator/session variation
+    that the pre-drying features cannot explain, which is itself a finding &mdash; a
+    single recommended temperature is a weak target, and the dynamic model that
+    observes the realised weight-loss trajectory is the stronger estimator once
+    drying is underway. This is why the framework shows the pre-drying estimate only
+    until the weight signal becomes reliable, then hands over.</p>
+
+    <figure>
+      <svg viewBox="0 0 420 300" xmlns="http://www.w3.org/2000/svg" font-family="'IBM Plex Sans',sans-serif">
+        <rect width="420" height="300" fill="#ffffff"/>
+        <g stroke="#e4e0d6" stroke-width="1">
+          <line x1="60" y1="30" x2="60" y2="250"/><line x1="60" y1="250" x2="390" y2="250"/>
+          <line x1="60" y1="195" x2="390" y2="195"/><line x1="60" y1="140" x2="390" y2="140"/><line x1="60" y1="85" x2="390" y2="85"/>
+          <line x1="142" y1="30" x2="142" y2="250"/><line x1="225" y1="30" x2="225" y2="250"/><line x1="307" y1="30" x2="307" y2="250"/>
+        </g>
+        <line x1="60" y1="250" x2="390" y2="30" stroke="#37474F" stroke-width="1" stroke-dasharray="4 3"/>
+        <g><circle cx="166.9" cy="186.7" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="274.8" cy="116.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="236.8" cy="135.2" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="79.1" cy="237.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="72.4" cy="243.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="83.1" cy="243.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="200.1" cy="149.2" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="100.9" cy="229.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="267.1" cy="101.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="250.4" cy="125.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="382.2" cy="45.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="343.3" cy="65.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="107.6" cy="226.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="161.8" cy="175.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="119.6" cy="208.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="270.8" cy="112.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="240.8" cy="139.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="79.7" cy="243.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="284.5" cy="102.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="163.7" cy="178.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="209.6" cy="154.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="322.1" cy="70.7" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="140.6" cy="194.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="233.3" cy="126.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="300.7" cy="94.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="383.5" cy="43.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="198.0" cy="152.2" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="110.2" cy="216.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="72.9" cy="237.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="312.3" cy="80.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="348.9" cy="61.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="289.4" cy="94.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="251.4" cy="123.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="337.2" cy="55.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="216.5" cy="142.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="80.0" cy="232.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="273.6" cy="96.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="331.2" cy="74.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="187.3" cy="161.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="67.4" cy="245.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="115.5" cy="221.7" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="79.5" cy="231.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="102.7" cy="227.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="189.0" cy="155.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="86.6" cy="233.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="241.3" cy="120.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="330.4" cy="61.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="151.9" cy="190.7" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="178.4" cy="162.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="376.1" cy="47.2" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="118.2" cy="217.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="137.0" cy="199.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="254.4" cy="125.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="61.4" cy="250.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="181.9" cy="167.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="374.5" cy="36.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="230.1" cy="133.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="283.1" cy="111.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="356.8" cy="45.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="348.6" cy="50.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="189.5" cy="166.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="94.2" cy="224.2" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="80.5" cy="246.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="128.9" cy="211.7" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="172.2" cy="185.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="60.1" cy="250.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="93.5" cy="230.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="68.4" cy="235.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="262.6" cy="122.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="143.2" cy="198.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="180.2" cy="178.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="340.1" cy="52.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="213.8" cy="147.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="88.3" cy="240.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="173.1" cy="180.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="333.5" cy="75.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="67.6" cy="234.7" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="234.3" cy="141.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="239.2" cy="141.2" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="234.3" cy="123.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="344.9" cy="55.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="146.2" cy="195.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="115.1" cy="207.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="235.8" cy="126.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="168.8" cy="183.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="327.8" cy="60.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="341.4" cy="55.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="330.0" cy="64.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="134.8" cy="199.7" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="177.3" cy="182.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="69.2" cy="248.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="145.5" cy="188.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="375.6" cy="40.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="369.2" cy="32.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="375.2" cy="43.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="132.8" cy="207.7" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="124.9" cy="213.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="265.9" cy="103.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="337.3" cy="65.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="275.5" cy="99.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="88.0" cy="227.7" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="360.2" cy="43.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="307.5" cy="85.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="118.9" cy="204.2" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="169.7" cy="170.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="380.6" cy="38.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="192.5" cy="151.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="299.2" cy="98.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="101.9" cy="230.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="358.6" cy="44.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="108.2" cy="210.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="383.5" cy="30.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="175.6" cy="171.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="103.2" cy="232.2" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="380.4" cy="33.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="233.8" cy="124.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="203.2" cy="146.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="332.6" cy="74.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="143.1" cy="199.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="139.4" cy="195.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="145.6" cy="194.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="103.3" cy="211.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="176.7" cy="173.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="252.5" cy="112.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="198.8" cy="148.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="225.5" cy="138.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="232.8" cy="145.7" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="205.2" cy="160.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="61.3" cy="242.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="116.9" cy="212.7" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="299.3" cy="89.2" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="167.6" cy="177.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="243.3" cy="121.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="95.0" cy="225.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="142.0" cy="200.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="314.8" cy="79.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="245.4" cy="120.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="361.1" cy="50.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="262.1" cy="115.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="229.0" cy="133.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="209.3" cy="149.7" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="217.8" cy="134.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="290.7" cy="87.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="370.9" cy="48.2" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="244.6" cy="116.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="337.2" cy="73.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="100.1" cy="224.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="83.9" cy="239.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="84.1" cy="230.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="318.7" cy="68.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="111.0" cy="211.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="277.9" cy="112.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="351.3" cy="45.2" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="132.5" cy="191.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="191.4" cy="162.7" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="386.7" cy="24.7" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="113.3" cy="216.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="230.1" cy="140.2" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="124.6" cy="211.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="298.3" cy="102.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="242.8" cy="129.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="66.0" cy="249.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="265.9" cy="112.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="81.2" cy="224.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="320.2" cy="65.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="94.6" cy="232.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="73.1" cy="235.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="149.2" cy="198.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="199.3" cy="147.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="330.3" cy="75.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="109.3" cy="207.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="248.3" cy="119.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="89.5" cy="240.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="287.1" cy="100.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="83.9" cy="224.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="269.4" cy="103.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="87.6" cy="223.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="82.0" cy="227.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="209.7" cy="153.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="242.5" cy="118.7" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="148.4" cy="199.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="233.9" cy="140.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="96.1" cy="233.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="76.6" cy="245.7" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="163.0" cy="185.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="310.6" cy="87.7" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="225.0" cy="147.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="174.5" cy="184.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="142.6" cy="205.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="301.9" cy="87.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="122.5" cy="208.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="368.4" cy="53.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="330.2" cy="71.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="223.4" cy="133.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="189.7" cy="163.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="287.0" cy="87.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="173.1" cy="167.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="293.2" cy="91.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="193.6" cy="164.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="77.9" cy="246.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="83.3" cy="229.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="144.3" cy="201.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="87.9" cy="223.7" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="347.3" cy="54.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="153.0" cy="193.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="156.7" cy="186.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="112.0" cy="216.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="146.9" cy="181.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="381.0" cy="35.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="140.7" cy="185.7" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="162.2" cy="185.2" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="60.4" cy="250.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="216.6" cy="145.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="126.3" cy="205.7" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="61.6" cy="250.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="89.6" cy="232.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="73.8" cy="250.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="160.4" cy="189.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="253.2" cy="120.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="307.7" cy="81.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="296.3" cy="83.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="188.5" cy="168.2" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="385.0" cy="41.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="299.0" cy="87.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="74.5" cy="232.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="354.3" cy="50.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="302.2" cy="81.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="106.0" cy="218.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="226.4" cy="131.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="325.5" cy="65.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="252.7" cy="112.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="285.4" cy="95.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="135.9" cy="210.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="103.9" cy="223.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="94.6" cy="219.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="244.3" cy="124.2" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="266.7" cy="108.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="221.5" cy="153.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="323.2" cy="68.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="226.0" cy="138.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="277.6" cy="114.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="303.1" cy="93.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="84.6" cy="238.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="300.7" cy="96.2" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="304.1" cy="76.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="223.0" cy="144.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="218.1" cy="140.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="313.1" cy="78.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="272.1" cy="118.2" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="108.7" cy="223.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="305.3" cy="90.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="247.4" cy="136.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="80.0" cy="241.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="281.8" cy="97.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="283.0" cy="106.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="230.5" cy="137.2" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="213.9" cy="156.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="354.9" cy="60.2" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="382.8" cy="24.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="65.8" cy="247.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="330.6" cy="59.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="208.3" cy="156.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="129.2" cy="193.7" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="129.5" cy="201.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="106.8" cy="218.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="374.4" cy="48.7" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="330.7" cy="69.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="352.7" cy="50.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="136.4" cy="190.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="220.4" cy="153.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="61.2" cy="249.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="208.8" cy="155.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="106.4" cy="222.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="164.3" cy="172.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="60.6" cy="243.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="336.9" cy="74.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="365.7" cy="41.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="357.5" cy="56.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="182.8" cy="170.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="389.6" cy="28.2" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="179.0" cy="172.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="150.8" cy="199.7" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="93.6" cy="220.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="154.3" cy="177.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="142.3" cy="200.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="228.6" cy="144.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="183.2" cy="157.5" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="351.8" cy="48.4" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="268.2" cy="101.8" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="370.4" cy="41.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="297.5" cy="101.9" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="301.7" cy="90.0" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="308.4" cy="81.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="154.4" cy="197.3" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="365.8" cy="54.6" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="215.8" cy="149.7" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="158.3" cy="179.1" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="382.2" cy="40.7" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="276.5" cy="110.2" r="2.3" fill="#6A1B9A" opacity="0.30"/><circle cx="243.9" cy="129.8" r="2.3" fill="#6A1B9A" opacity="0.30"/></g>
+        <text x="225" y="285" font-size="10" fill="#5c6470" text-anchor="middle">Actual remaining time (minutes)</text>
+        <text x="18" y="140" font-size="10" fill="#5c6470" text-anchor="middle" transform="rotate(-90 18 140)">Predicted remaining time (minutes)</text>
+        <g font-size="9" fill="#5c6470"><text x="60" y="264">0</text><text x="142" y="264">8</text><text x="225" y="264">17</text><text x="307" y="264">25</text><text x="386" y="264">33</text>
+          <text x="52" y="253" text-anchor="end">0</text><text x="52" y="198" text-anchor="end">8</text><text x="52" y="143" text-anchor="end">17</text><text x="52" y="88" text-anchor="end">25</text><text x="52" y="33" text-anchor="end">33</text></g>
+        <rect x="70" y="38" width="130" height="46" rx="4" fill="#ffffff" stroke="#e4e0d6"/>
+        <text x="78" y="52" font-size="10" fill="#1c2024" font-family="'IBM Plex Mono',monospace">R&sup2; = 0.957</text>
+        <text x="78" y="65" font-size="10" fill="#1c2024" font-family="'IBM Plex Mono',monospace">MAE = 1.10 min</text>
+        <text x="78" y="78" font-size="10" fill="#1c2024" font-family="'IBM Plex Mono',monospace">grouped 5-fold CV</text>
+      </svg>
+      <figcaption><b>Fig. 3.</b> Predicted versus actual remaining drying time for
+      the random forest under grouped five-fold cross-validation. Each drying profile
+      was assigned wholly to a single fold; the dashed line denotes ideal agreement.
+      Generated from the out-of-fold predictions (<code>fig3_pred_vs_actual.pdf</code>).</figcaption>
+    </figure>
+
+    <div class="tbl-wrap">
+      <table>
+        <caption>Table I &mdash; Predictive Model Performance (Five-Fold Cross-Validation)</caption>
+        <thead><tr><th>Target</th><th>Model</th><th class="num">R&sup2;</th><th class="num">MAE</th><th class="num">RMSE</th></tr></thead>
+        <tbody>
+          <tr><td rowspan="3">Remaining time&nbsp;<sup>a</sup> (min)</td><td>Random Forest</td><td class="num">0.956</td><td class="num">1.10</td><td class="num">1.50</td></tr>
+          <tr><td>Gradient Boosting</td><td class="num">0.950</td><td class="num">1.23</td><td class="num">1.61</td></tr>
+          <tr><td>Linear Regression</td><td class="num">0.913</td><td class="num">1.59</td><td class="num">2.12</td></tr>
+          <tr><td>Total drying time&nbsp;<sup>b</sup> (min)</td><td>Random Forest</td><td class="num">0.924</td><td class="num">1.37</td><td class="num">1.78</td></tr>
+          <tr><td>Recommended temp.&nbsp;<sup>b</sup> (&deg;C)</td><td>Random Forest</td><td class="num">0.567</td><td class="num">3.53</td><td class="num">4.43</td></tr>
+        </tbody>
+      </table>
+      <div class="tfoot"><sup>a</sup> Grouped cross-validation by drying profile.
+      &nbsp; <sup>b</sup> Pre-drying joint model; per-target metrics from standard
+      five-fold cross-validation.</div>
+    </div>
+
+    <h3>System Functional Validation</h3>
+    <p>Table&nbsp;II summarises how each function was exercised. The two-phase start,
+    the re-estimation loop, the risk assessments, the safety clamp and fault
+    transitions, and the completion/cooling sequence run end-to-end against the live
+    services and mobile application. The drying-controller state machine and sensor
+    parser have unit tests, including the one-shot completion event, the manual
+    heater cut-off, and rejection of malformed lines. The state-reconciliation fix is
+    confirmed by the client suspending the countdown whenever the chamber reports it
+    is not running. No function has yet been validated in field production.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <caption>Table II &mdash; System Functional Validation</caption>
+        <thead><tr><th>Function</th><th>Evidence</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Remaining-time prediction</td><td>Grouped 5-fold test</td><td><span class="pill p-warn">Integrated; grouped cross-validation</span></td></tr>
+          <tr><td>Pre-drying prediction</td><td>5-fold test</td><td><span class="pill p-warn">Integrated; cross-validated</span></td></tr>
+          <tr><td>Spoilage-risk rule</td><td>Weighted rule + factor breakdown</td><td><span class="pill p-ok">Integrated; functionally tested</span></td></tr>
+          <tr><td>Over-drying auto-stop</td><td>Debounced rule issues stop command</td><td><span class="pill p-ok">Integrated; functionally tested</span></td></tr>
+          <tr><td>Two-phase drying start</td><td>Chamber sensor check before active-batch record</td><td><span class="pill p-ok">Integrated; functionally tested</span></td></tr>
+          <tr><td>Set-point safety clamp</td><td>Bound applied in three places</td><td><span class="pill p-ok">Integrated; correct by construction</span></td></tr>
+          <tr><td>Sensor-fault handling</td><td>Bounded consecutive-failure fault; no resume</td><td><span class="pill p-ok">Integrated; unit-tested</span></td></tr>
+          <tr><td>Completion + cooling</td><td>Weight/duration criteria; timed cooling</td><td><span class="pill p-ok">Integrated; unit-tested</span></td></tr>
+          <tr><td>State reconciliation</td><td>Chamber status suspends countdown</td><td><span class="pill p-ok">Integrated; functionally tested</span></td></tr>
+          <tr><td>Waste &amp; salt estimation</td><td>Per-variety coefficients on batch</td><td><span class="pill p-warn">Integrated; domain validation pending</span></td></tr>
+          <tr><td>Event-level traceability</td><td>Per-service logs keyed on batch ID</td><td><span class="pill p-warn">Integrated; completeness pending</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Discussion</h3>
+    <p>Two findings matter beyond the architecture. First, predicted parameters must
+    be constrained by a safety layer independent of the model: separating the safety
+    envelope from the prediction path means a model error degrades accuracy but
+    cannot command an unsafe chamber. Second, the component holding a logical record
+    of an activity must never be treated as authoritative about whether it is
+    physically occurring; making the device authoritative removed a class of
+    misleading displays. Prototype experience also shows integration benefits are
+    contingent on sensing reliability: intermittent load-cell dropouts repeatedly
+    triggered protective faults that halted healthy runs, because both time
+    predictors and the completion check share the weight signal. Whether multi-modal
+    information provides value unavailable from single-mode processing is a question
+    for the field trial below.</p>
+
+    <h2 class="sec" id="s8"><span class="rn">VIII</span>Limitations and Future Work</h2>
+    <p>The drying-time models are cross-validated on a modelled dataset and not yet
+    tested on independent logged real drying runs; that evaluation, split at the
+    drying-run level, is the primary pending experiment. Weight reduction indicates
+    drying progression but is not equivalent to laboratory-measured moisture content
+    without validation, and <em>k</em>, the gas-to-smell mapping, the alert
+    thresholds, and the temperature envelope are configurable engineering parameters
+    rather than established constants. The edge protocol does not yet read back relay
+    state, so control is commanded but not actuator-acknowledged. Traceability is
+    per-service and keyed on a shared identifier; a unified timeline is partial. No
+    baseline comparison against conventional processing has been conducted, so no
+    claim of improved quality, reduced spoilage, or reduced drying time is made.
+    Future work will collect logged real drying runs with reference moisture
+    measurements across varieties; add actuator acknowledgement and measure
+    temperature-tracking error, humidity exposure, actuator latency, and
+    communication success rate; train and evaluate a spoilage classifier;
+    consolidate the traceability timeline; and run a controlled comparison of Smart
+    Karawala against conventional processing.</p>
+
+    <h2 class="sec" id="s9"><span class="rn">IX</span>Conclusion</h2>
+    <p>Smart Karawala is a batch-centric AI and IoT framework that links
+    machine-learning drying-parameter prediction to an IoT-controlled drying
+    chamber, keeps an independent safety layer that can override the predictive
+    path, and retains every decision as an event-level batch history. A two-phase
+    start returns predicted parameters to the chamber as control set-points only
+    after the chamber confirms its sensor state. On a physics-informed modelled
+    dataset the dynamic remaining-time regressor reached a grouped cross-validated
+    <em>R</em><sup>2</sup> of 0.96 (MAE 1.1&nbsp;min), and the integrated workflow
+    &mdash; prediction, control-profile handoff, sensor-validated start, live
+    re-estimation, safety auto-stop, completion, and event logging &mdash; is
+    operational. The framework makes an experience-dependent process measurable and
+    traceable; quantifying its benefit over conventional processing is the immediate
+    next step.</p>
+
+    <h4>Acknowledgment</h4>
+    <p>The authors thank their academic supervisors, domain experts, and the
+    dry-fish processors who supported this work.</p>
+
+    <h2 class="sec" id="refs"><span class="rn">&nbsp;</span>References</h2>
+    <ol class="refs">
+      <li>N. Mishra, S. K. Jain, N. Agrawal, N. K. Jain, N. Wadhawan, and N. L. Panwar, &ldquo;Development of drying system by using internet of things for food quality monitoring and controlling,&rdquo; <i>Energy Nexus</i>, vol. 11, art. 100219, Sep. 2023, doi: 10.1016/j.nexus.2023.100219.</li>
+      <li>Y. Alvinika, D. B. Setyohadi, and M. Sulistyoningsih, &ldquo;IoT-based monitoring and design of automatic fish drying equipment using fuzzy logic,&rdquo; <i>IOP Conf. Ser.: Earth Environ. Sci.</i>, vol. 704, no. 1, art. 012042, 2021, doi: 10.1088/1755-1315/704/1/012042.</li>
+      <li>J. Guo <i>et al.</i>, &ldquo;Intelligent monitoring, predicting, and control technology of food drying: recent advances, challenges, and future prospects,&rdquo; <i>Food Control</i>, vol. 180, art. 111666, 2026, doi: 10.1016/j.foodcont.2025.111666.</li>
+      <li>R. Rakholia, A. L. Su&aacute;rez-Cetrulo, M. Singh, and R. S. Carbajo, &ldquo;AI-driven meat food drying time prediction for resource optimization and production planning in smart manufacturing,&rdquo; <i>IEEE Access</i>, vol. 13, pp. 22420&ndash;22428, 2025, doi: 10.1109/ACCESS.2025.3534379.</li>
+      <li>F. Ahmad, M. S. Younis, R. U. Zahid, and L. A. Shahid, &ldquo;Machine learning based grain moisture estimation for real-time monitoring of high-temperature paddy drying silo,&rdquo; in <i>Proc. IEEE 23rd Int. Multitopic Conf. (INMIC)</i>, 2020, pp. 1&ndash;6, doi: 10.1109/INMIC50486.2020.9318092.</li>
+      <li>T. H. M. Ghanem <i>et al.</i>, &ldquo;Thin-layer modeling, drying parameters, and techno-enviro-economic analysis of a solar dried salted tilapia fish fillets,&rdquo; <i>Sci. Rep.</i>, vol. 15, art. 5073, 2025, doi: 10.1038/s41598-025-87807-w.</li>
+      <li>J. H. Friedman, &ldquo;Greedy function approximation: a gradient boosting machine,&rdquo; <i>Ann. Statist.</i>, vol. 29, no. 5, pp. 1189&ndash;1232, 2001, doi: 10.1214/aos/1013203451.</li>
+      <li>M. R. M. Setyagraha, H. A. Nurqamaradillah, L. M. Hermawan, N. R. Pratama, L. Novamizanti, and D. R. Wijaya, &ldquo;A portable real-time electronic nose for evaluating seafood freshness using machine learning,&rdquo; <i>IEEE Access</i>, vol. 13, pp. 82000&ndash;82019, 2025, doi: 10.1109/ACCESS.2025.3576345.</li>
+      <li>L. Breiman, &ldquo;Random forests,&rdquo; <i>Mach. Learn.</i>, vol. 45, no. 1, pp. 5&ndash;32, 2001, doi: 10.1023/A:1010933404324.</li>
+      <li>J. Cromwell, C. Turkson, M. Dora, and F. A. Yamoah, &ldquo;Digital technologies for traceability and transparency in the global fish supply chains: a systematic review and future directions,&rdquo; <i>Marine Policy</i>, vol. 178, art. 106700, Aug. 2025, doi: 10.1016/j.marpol.2025.106700.</li>
+      <li>Y. P. Tsang, K. L. Choy, C. H. Wu, G. T. S. Ho, and H. Y. Lam, &ldquo;Blockchain-driven IoT for food traceability with an integrated consensus mechanism,&rdquo; <i>IEEE Access</i>, vol. 7, pp. 129000&ndash;129017, 2019, doi: 10.1109/ACCESS.2019.2940227.</li>
+      <li>Food and Agriculture Organization of the United Nations, &ldquo;Postharvest losses in the multiday fisheries sector of Sri Lanka,&rdquo; FAO, Rome, Italy, 2021.</li>
+    </ol>
+
+    <p class="foot">v2 review draft from <code>smart_karawala_paper.tex</code>.
+    Verify every DOI and the page range for ref.&nbsp;[8] against IEEE Xplore.
+    Replace author emails/ORCIDs and the two supervisor names. Compile in Overleaf
+    and confirm &le;&nbsp;6 pages with floats placed.</p>
+  </main>
+</div>
