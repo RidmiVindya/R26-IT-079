@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="900" height="520" viewBox="0 0 900 520" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="a3" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#444"/>
+    </marker>
+  </defs>
+  <style>
+    .t { font-size:22px; font-weight:700; fill:#0d2b52; }
+    .step-text { font-size:13.5px; font-weight:600; fill:#fff; text-anchor:middle; }
+    .step-sub { font-size:10.5px; fill:#eef3fb; text-anchor:middle; }
+    .note { font-size:11.5px; fill:#555; text-anchor:middle; }
+  </style>
+
+  <text x="450" y="34" class="t" text-anchor="middle">Before Drying Starts: "How Hot, How Long?"</text>
+
+  <rect x="330" y="60" width="240" height="55" fill="#6a4c93" rx="14"/>
+  <text x="450" y="83" class="step-text">Operator picks a batch</text>
+  <text x="450" y="99" class="step-sub">fish type + weight, from Jayani's records</text>
+
+  <line x1="450" y1="115" x2="450" y2="150" stroke="#444" stroke-width="1.6" marker-end="url(#a3)"/>
+
+  <rect x="290" y="155" width="320" height="60" fill="#2e86ab" rx="14"/>
+  <text x="450" y="180" class="step-text">initial_prediction_service</text>
+  <text x="450" y="197" class="step-sub">looks at fish type + weight + humidity + gas</text>
+  <text x="450" y="211" class="step-sub">and guesses a good temperature and total time</text>
+
+  <line x1="450" y1="215" x2="450" y2="250" stroke="#444" stroke-width="1.6" marker-end="url(#a3)"/>
+
+  <rect x="330" y="255" width="240" height="55" fill="#0d2b52" rx="14"/>
+  <text x="450" y="278" class="step-text">App shows the guess</text>
+  <text x="450" y="294" class="step-sub">e.g. "120°C for 30 minutes"</text>
+
+  <line x1="450" y1="310" x2="450" y2="345" stroke="#444" stroke-width="1.6" marker-end="url(#a3)"/>
+
+  <rect x="290" y="350" width="320" height="55" fill="#1c5aa0" rx="14"/>
+  <text x="450" y="373" class="step-text">Operator taps "Start Drying"</text>
+  <text x="450" y="389" class="step-sub">the guess is sent to Milan's oven as its target</text>
+
+  <line x1="450" y1="405" x2="450" y2="440" stroke="#444" stroke-width="1.6" marker-end="url(#a3)"/>
+
+  <rect x="330" y="445" width="240" height="55" fill="#0d2b52" rx="14"/>
+  <text x="450" y="468" class="step-text">Oven starts heating</text>
+  <text x="450" y="484" class="step-sub">the live monitoring loop takes over from here</text>
+
+  <text x="450" y="45" text-anchor="middle" font-size="11.5" fill="#888" font-style="italic">A one-time guess, made once, before the heat turns on.</text>
+</svg>

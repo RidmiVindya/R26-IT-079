@@ -8,11 +8,13 @@ router = APIRouter()
 # General Routes
 # -----------------------------
 
+@router.post("")
 @router.post("/")
 async def create_batch(data: dict = Body(...)):
     return await batch_controller.create_batch(data)
 
 
+@router.get("")
 @router.get("/")
 async def get_all_batches():
     return await batch_controller.get_all_batches()
@@ -23,11 +25,13 @@ async def get_all_batches():
 # -----------------------------
 
 @router.get("/dashboard")
+@router.get("/dashboard/")
 async def get_dashboard():
     return await batch_controller.get_traceability_dashboard()
 
 
 @router.get("/reports")
+@router.get("/reports/")
 async def get_processing_reports():
     return await batch_controller.get_processing_reports()
 
@@ -54,6 +58,11 @@ async def start_salting(batch_id: str):
 @router.get("/{batch_id}/monitoring")
 async def get_monitoring(batch_id: str):
     return await batch_controller.salting_monitor(batch_id)
+
+
+@router.post("/{batch_id}/complete-salting")
+async def complete_salting(batch_id: str):
+    return await batch_controller.complete_salting(batch_id)
 
 
 @router.post("/{batch_id}/send-waste-notification")

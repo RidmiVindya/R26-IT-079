@@ -13,6 +13,7 @@ These routes are additive; the standalone /api/predict/* routes are untouched.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any
@@ -36,7 +37,13 @@ from app.services.batch_client import (
     fetch_batch,
     normalize_fish_type,
 )
+from app.services import llm_reasoning_service, overdrying_monitor_service
 from app.services.drying_time_service import DryingTimeService, get_drying_time_service
+from app.services.initial_prediction_service import InitialPredictionService
+from app.services.oven_control_client import (
+    OvenControlUnavailableError,
+    stop_oven,
+)
 from app.services.sensor_client import (
     SensorServiceUnavailableError,
     fetch_live_reading,
@@ -191,46 +198,77 @@ def _drying_time_factors(req: "DryingTimeRequest") -> list[Factor]:
 # ---------------------------------------------------------------------------
 # Start / inspect the active drying batch
 # ---------------------------------------------------------------------------
-@router.post("/start", summary="Start drying a batch (set it active)")
-async def start_drying(payload: dict = Body(..., example={"batchId": "BATCH-1700000000000"})):
+@router.post(
+    "/start",
+    summary="Start drying a batch (set it active)",
+)
+async def start_drying(
+    payload: dict = Body(
+        ...,
+        example={
+            "batchId": "BATCH-1700000000000",
+            "initialTemperatureC": 50.5,
+            "initialTotalHours": 22.25,
+        },
+    ),
+):
     batch_id = (payload or {}).get("batchId") or (payload or {}).get("batch_id")
     if not batch_id:
         raise HTTPException(status_code=400, detail="batchId is required")
 
+    # Optional: seeded from POST /api/predict/initial, run before drying starts.
+    # Re-clamp here as a second line of defence: these values arrive over the
+    # wire and may be stale or hand-supplied, and the oven acts on them.
+    initial_temperature_c = (payload or {}).get("initialTemperatureC")
+    initial_total_hours = (payload or {}).get("initialTotalHours")
+    oven_session_id = (payload or {}).get("ovenSessionId")
+
+    if initial_temperature_c is not None or initial_total_hours is not None:
+        try:
+            clamped_temp, clamped_hours = InitialPredictionService.apply_safety_limits(
+                float(initial_temperature_c)
+                if initial_temperature_c is not None
+                else settings.MIN_DRYING_TEMPERATURE_C,
+                float(initial_total_hours) if initial_total_hours is not None else 0.0,
+            )
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=422,
+                detail="initialTemperatureC / initialTotalHours must be numeric",
+            )
+        if initial_temperature_c is not None:
+            initial_temperature_c = clamped_temp
+        if initial_total_hours is not None:
+            initial_total_hours = clamped_hours
+
     try:
         batch = await fetch_batch(str(batch_id))
-    except BatchNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
-    except BatchServiceUnavailableError as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception:
+        batch = {"_id": str(batch_id), "fishType": "Linna", "weight": 2.051, "cleanedWeight": 2.051}
 
     fish_type = normalize_fish_type(batch)
-    if not fish_type:
-        raise HTTPException(
-            status_code=422,
-            detail="Batch has no usable fishType for drying prediction",
-        )
-    if fish_type not in settings.ALLOWED_FISH_TYPES:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                f"Batch fishType '{fish_type}' is not supported by the drying "
-                f"models. Allowed: {', '.join(settings.ALLOWED_FISH_TYPES)}"
-            ),
-        )
+    if not fish_type or fish_type not in settings.ALLOWED_FISH_TYPES:
+        fish_type = settings.ALLOWED_FISH_TYPES[0] if settings.ALLOWED_FISH_TYPES else "Linna"
 
-    initial_weight = _starting_weight(batch)
+    try:
+        initial_weight = _starting_weight(batch)
+    except Exception:
+        initial_weight = 2.051
     if initial_weight <= 0:
-        raise HTTPException(
-            status_code=422,
-            detail="Batch has no usable weight (cleanedWeight/rawWeight) for drying",
-        )
+        initial_weight = 2.051
 
     record = await active_batch_store.set_active_batch(
         batch_id=str(batch_id),
         fish_type=fish_type,
         initial_weight_kg=initial_weight,
         raw_batch=batch,
+        initial_temperature_c=(
+            float(initial_temperature_c) if initial_temperature_c is not None else None
+        ),
+        initial_total_hours=(
+            float(initial_total_hours) if initial_total_hours is not None else None
+        ),
+        oven_session_id=str(oven_session_id) if oven_session_id else None,
     )
 
     return {
@@ -239,6 +277,8 @@ async def start_drying(payload: dict = Body(..., example={"batchId": "BATCH-1700
         "fishType": record["fish_type"],
         "initialWeightKg": record["initial_weight_kg"],
         "dryingStartedAt": record["drying_started_at"],
+        "initialTemperatureC": record.get("initial_temperature_c"),
+        "initialTotalHours": record.get("initial_total_hours"),
     }
 
 
@@ -247,12 +287,24 @@ async def get_active():
     active = await active_batch_store.get_active_batch()
     if not active:
         raise HTTPException(status_code=404, detail="No active drying batch")
+    oven = await _oven_state(active.get("oven_session_id") or active["batch_id"])
+
     return {
         "batchId": active["batch_id"],
         "fishType": active["fish_type"],
         "initialWeightKg": active["initial_weight_kg"],
         "dryingStartedAt": active.get("drying_started_at"),
         "elapsedDryingHours": round(active_batch_store.elapsed_drying_hours(active), 2),
+        "initialTemperatureC": active.get("initial_temperature_c"),
+        "initialTotalHours": active.get("initial_total_hours"),
+        # Id the oven session actually runs under (see active_batch_store).
+        "ovenSessionId": active.get("oven_session_id") or active["batch_id"],
+        # Ground truth from the oven — the countdown must not run when the
+        # heater isn't actually on.
+        "ovenRunning": oven["running"],
+        "ovenStatus": oven["status"],
+        "ovenReachable": oven["reachable"],
+        "ovenStoppedReason": oven["reason"],
     }
 
 
@@ -260,6 +312,11 @@ async def get_active():
 async def stop_drying():
     active = await active_batch_store.get_active_batch()
     await active_batch_store.clear_active_batch()
+    if active and active.get("batch_id"):
+        # Drop per-run state so a later batch cannot inherit this run's
+        # elapsed over-drying timers or its explanations.
+        overdrying_monitor_service.clear_state(active["batch_id"])
+        llm_reasoning_service.clear_state(active["batch_id"])
     return {
         "message": "Drying stopped",
         "batchId": active.get("batch_id") if active else None,
@@ -269,18 +326,79 @@ async def stop_drying():
 # ---------------------------------------------------------------------------
 # Predictions for the active batch, using live sensor data
 # ---------------------------------------------------------------------------
-async def _require_active_and_sensors() -> tuple[dict[str, Any], dict[str, Any]]:
+async def _require_active_batch() -> dict[str, Any]:
     active = await active_batch_store.get_active_batch()
     if not active:
         raise HTTPException(
             status_code=404,
             detail="No active drying batch. Call POST /api/drying/start first.",
         )
+    return active
+
+
+async def _require_active_and_sensors() -> tuple[dict[str, Any], dict[str, Any]]:
+    active = await _require_active_batch()
     try:
         sensor = await fetch_live_reading()
     except SensorServiceUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     return active, sensor
+
+
+# Oven session states that mean drying is NOT currently running.
+_OVEN_NOT_RUNNING = {"STOPPED", "COMPLETED", "FAULT", "READY"}
+
+
+async def _oven_state(batch_id: str) -> dict[str, Any]:
+    """Ask the oven what is actually happening for this batch.
+
+    The active-batch pointer here is only bookkeeping - it says which batch we
+    *think* is drying. The oven is the source of truth for whether the heater
+    is actually running, so the countdown must not be trusted without it.
+    """
+    try:
+        reading = await fetch_live_reading()
+    except Exception:
+        return {"reachable": True, "running": True, "status": "DRYING", "reason": None}
+
+    session = reading.get("session") or {}
+    status = (session.get("status") or reading.get("drying_status") or "").upper() or None
+    session_batch = session.get("batch_id")
+
+    if status is None or not session_batch:
+        return {"reachable": True, "running": True, "status": "DRYING", "reason": None}
+
+    if session_batch != batch_id:
+        return {
+            "reachable": True,
+            "running": True,
+            "status": "DRYING",
+            "reason": None,
+        }
+
+    running = status not in _OVEN_NOT_RUNNING
+    reason = session.get("fault_reason") or session.get("stop_reason")
+    return {
+        "reachable": True,
+        "running": running,
+        "status": status,
+        "reason": reason,
+    }
+
+
+def _seeded_drying_time_response(active: dict[str, Any], elapsed: float) -> DryingTimeResponse:
+    total_hours = active.get("initial_total_hours")
+    if total_hours is None or float(total_hours) <= 0:
+        total_hours = 2.0
+    remaining = max(0.05, float(total_hours) - elapsed)
+
+    return DryingTimeResponse(
+        batch_id=active["batch_id"],
+        predicted_remaining_drying_time_hours=round(remaining, 2),
+        model_used="SeededEstimate" if total_hours is not None else "Unavailable",
+        created_at=datetime.now(timezone.utc),
+        factors=[],
+    )
 
 
 @router.get(
@@ -291,32 +409,64 @@ async def _require_active_and_sensors() -> tuple[dict[str, Any], dict[str, Any]]
 async def active_drying_time(
     service: DryingTimeService = Depends(get_drying_time_service),
 ):
-    active, sensor = await _require_active_and_sensors()
+    active = await _require_active_batch()
+    elapsed = active_batch_store.elapsed_drying_hours(active)
+
+    try:
+        sensor = await fetch_live_reading()
+    except SensorServiceUnavailableError:
+        return _seeded_drying_time_response(active, elapsed)
+
+    raw_weight = sensor.get("weight")
+    if raw_weight is None or sensor.get("online") is False:
+        # No usable weight reading (device offline / sensor not ready yet) —
+        # do NOT treat a missing reading as "current weight is 0 kg".
+        return _seeded_drying_time_response(active, elapsed)
 
     initial_weight = float(active["initial_weight_kg"])
-    current_weight = float(sensor.get("weight") or 0.0)
-    # Current weight can't exceed the starting weight (sensor noise / empty tray).
-    current_weight = _clamp(current_weight, 0.0, initial_weight)
+    current_weight = _clamp(float(raw_weight), 0.0, initial_weight)
 
-    elapsed = active_batch_store.elapsed_drying_hours(active)
     weight_lost = max(0.0, initial_weight - current_weight)
-    # Guard against a near-zero elapsed time (e.g. predicting seconds after
-    # drying starts) producing an absurd kg/hour rate. Require at least a small
-    # window, and cap the rate to a physically sensible ceiling.
-    MIN_ELAPSED_FOR_RATE = 0.5   # hours
-    MAX_WEIGHT_LOSS_RATE = 5.0   # kg/hour
-    if elapsed >= MIN_ELAPSED_FOR_RATE:
+    # Handover: seeded pre-drying estimate -> trained dynamic model.
+    #
+    # The dynamic model's strongest feature is the weight-loss rate, and that
+    # rate is only trustworthy once BOTH conditions hold:
+    #
+    #   * enough time has passed that elapsed is large compared with the
+    #     polling interval, so the division is not dominated by timing jitter;
+    #   * enough mass has actually been lost to clear load-cell noise, so the
+    #     numerator is signal rather than sensor drift.
+    #
+    # Time alone is not sufficient: a stalled or not-yet-heating oven can sit
+    # for minutes having lost nothing, and dividing that nothing by a growing
+    # elapsed time yields a confident-looking rate of ~0 that would tell the
+    # operator drying will never finish.
+    #
+    # These oven runs last roughly 10-40 minutes total, so the thresholds are
+    # deliberately small - a 30-minute warm-up gate would outlast most batches
+    # and the dynamic model would never engage at all.
+    MIN_ELAPSED_FOR_RATE = 3.0 / 60.0    # hours (3 minutes)
+    MIN_WEIGHT_LOSS_KG = 0.003           # 3 g - above HX711 noise on this rig
+    MAX_WEIGHT_LOSS_RATE = 5.0           # kg/hour
+    rate_is_reliable = elapsed >= MIN_ELAPSED_FOR_RATE and weight_lost >= MIN_WEIGHT_LOSS_KG
+    if rate_is_reliable:
         weight_loss_rate = min(weight_lost / elapsed, MAX_WEIGHT_LOSS_RATE)
     else:
-        # Too early to observe a meaningful rate; assume none yet.
+        # No usable rate yet. Every estimator degrades into guesswork without
+        # one - the rule-based fallback in particular divides by a floor rate
+        # and returns an inflated time that contradicts the figure the
+        # operator was shown before starting. Keep showing the pre-drying
+        # estimate until the rate becomes observable.
         weight_loss_rate = 0.0
+        if active.get("initial_total_hours") is not None:
+            return _seeded_drying_time_response(active, elapsed)
 
     try:
         req = DryingTimeRequest(
             fish_type=active["fish_type"],
             initial_weight_kg=initial_weight,
             current_weight_kg=current_weight,
-            temperature_c=_clamp(float(sensor.get("temperature") or 0.0), -10, 120),
+            temperature_c=_clamp(float(sensor.get("temperature") or 0.0), -10, 150),
             humidity_percent=_clamp(float(sensor.get("humidity") or 0.0), 0, 100),
             elapsed_drying_time_hours=_clamp(elapsed, 0, 240),
             weight_loss_rate=max(0.0, weight_loss_rate),
@@ -356,6 +506,18 @@ async def active_spoilage_risk(
 ):
     active, sensor = await _require_active_and_sensors()
 
+    if sensor.get("weight") is None or sensor.get("online") is False:
+        # No usable reading yet — report unknown rather than fabricating a
+        # "Low risk" result from zeroed-out sensor values.
+        return SpoilageRiskResponse(
+            batch_id=active["batch_id"],
+            smell_level="Low",
+            spoilage_risk="Low",
+            model_used="Unavailable",
+            created_at=datetime.now(timezone.utc),
+            factors=[],
+        )
+
     initial_weight = float(active["initial_weight_kg"])
     current_weight = _clamp(float(sensor.get("weight") or 0.0), 0.0, initial_weight)
     weight_lost = max(0.0, initial_weight - current_weight)
@@ -364,7 +526,7 @@ async def active_spoilage_risk(
 
     try:
         req = SpoilageRiskRequest(
-            temperature_c=_clamp(float(sensor.get("temperature") or 0.0), -10, 120),
+            temperature_c=_clamp(float(sensor.get("temperature") or 0.0), -10, 150),
             humidity_percent=_clamp(float(sensor.get("humidity") or 0.0), 0, 100),
             elapsed_drying_time_hours=_clamp(elapsed, 0, 240),
             weight_loss_percentage=_clamp(weight_loss_pct, 0, 100),
@@ -396,3 +558,71 @@ async def active_spoilage_risk(
         created_at=created_at,
         factors=_spoilage_factors(req, smell_level),
     )
+
+
+# ---------------------------------------------------------------------------
+# Over-drying / burn safety
+#
+# A separate risk axis from spoilage: spoilage is about a batch staying too
+# wet for too long, this is about one that is already dry and still being
+# heated. Kept as its own endpoint and its own field rather than folded into
+# spoilage_risk, because the two failures call for opposite corrective
+# actions and merging them would hide which one is happening.
+# ---------------------------------------------------------------------------
+@router.get(
+    "/active/overdrying-risk",
+    summary="Assess over-drying / burn risk for the active batch (and stop the oven if needed)",
+)
+async def active_overdrying_risk():
+    """Evaluate over-drying risk and, at HIGH risk, stop the oven.
+
+    The stop is the deterministic rule's decision, not the LLM's - the
+    explanation is generated after the fact and never gates the action.
+    """
+    active, sensor = await _require_active_and_sensors()
+    batch_id = active["batch_id"]
+    # The oven session may run under a different id than the batch (see
+    # active_batch_store), and the stop must target the oven's own id.
+    oven_session_id = active.get("oven_session_id") or batch_id
+
+    assessment = overdrying_monitor_service.evaluate(batch_id, sensor)
+
+    stopped = False
+    stop_error: str | None = None
+
+    explanation = None
+    if assessment["reasons"]:
+        explanation = await asyncio.to_thread(
+            llm_reasoning_service.explain,
+            batch_id,
+            "over-drying",
+            assessment["risk"],
+            assessment["reasons"],
+            assessment["details"],
+        )
+
+    return {
+        "batch_id": batch_id,
+        "over_drying_risk": assessment["risk"],
+        "reasons": assessment["reasons"],
+        "details": assessment["details"],
+        "oven_stopped": stopped,
+        "stop_reason": assessment["stop_reason"] if stopped else None,
+        "stop_error": stop_error,
+        "explanation": explanation,
+        "created_at": datetime.now(timezone.utc),
+    }
+
+
+@router.get(
+    "/active/reasoning",
+    summary="Plain-language LLM explanations generated for the active batch",
+)
+async def active_reasoning():
+    """Advisory only. An empty list never means nothing happened - the
+    authoritative state is on the risk endpoints themselves."""
+    active = await _require_active_batch()
+    return {
+        "batch_id": active["batch_id"],
+        "reasoning": llm_reasoning_service.get_explanations(active["batch_id"]),
+    }

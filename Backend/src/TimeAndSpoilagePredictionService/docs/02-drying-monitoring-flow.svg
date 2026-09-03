@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1000" height="1240" viewBox="0 0 1000 1240" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#444"/>
+    </marker>
+  </defs>
+  <style>
+    .t { font-size:24px; font-weight:700; fill:#0d2b52; }
+    .step { rx:14; }
+    .step-text { font-size:13.5px; font-weight:600; fill:#fff; text-anchor:middle; }
+    .step-sub { font-size:11px; fill:#eef3fb; text-anchor:middle; }
+    .decision-text { font-size:12.5px; font-weight:700; fill:#3a2a00; text-anchor:middle; }
+    .lbl { font-size:11.5px; fill:#333; text-anchor:middle; }
+    .lbl-yes { font-size:11.5px; fill:#1a7a35; font-weight:700; text-anchor:middle; }
+    .lbl-no { font-size:11.5px; fill:#a33; font-weight:700; text-anchor:middle; }
+  </style>
+
+  <text x="500" y="36" class="t" text-anchor="middle">What Happens While Fish Is Drying</text>
+  <text x="500" y="58" text-anchor="middle" font-size="13" fill="#666">Every 10 seconds, this whole loop runs again</text>
+
+  <!-- Start -->
+  <rect x="380" y="85" width="240" height="55" fill="#0d2b52" class="step"/>
+  <text x="500" y="108" class="step-text">Drying starts</text>
+  <text x="500" y="124" class="step-sub">Operator taps "Start Drying"</text>
+
+  <line x1="500" y1="140" x2="500" y2="175" stroke="#444" stroke-width="1.6" marker-end="url(#arrow2)"/>
+
+  <!-- Loop marker -->
+  <rect x="330" y="180" width="340" height="40" fill="#f0f4fb" stroke="#c8d6ec" rx="10"/>
+  <text x="500" y="205" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1c5aa0">↻ Repeats every 10 seconds while drying</text>
+
+  <line x1="500" y1="220" x2="500" y2="255" stroke="#444" stroke-width="1.6" marker-end="url(#arrow2)"/>
+
+  <!-- Step: read sensors -->
+  <rect x="330" y="260" width="340" height="55" fill="#1c5aa0" class="step"/>
+  <text x="500" y="283" class="step-text">Ask Milan's oven: "what do you see?"</text>
+  <text x="500" y="299" class="step-sub">temperature, weight, humidity, gas, heater on/off</text>
+
+  <line x1="500" y1="315" x2="500" y2="350" stroke="#444" stroke-width="1.6" marker-end="url(#arrow2)"/>
+
+  <!-- Branch: two checks side by side -->
+  <text x="500" y="345" text-anchor="middle" font-size="12" fill="#666" font-style="italic">Two separate checks run on the same reading:</text>
+
+  <line x1="500" y1="352" x2="270" y2="390" stroke="#444" stroke-width="1.3"/>
+  <line x1="500" y1="352" x2="730" y2="390" stroke="#444" stroke-width="1.3"/>
+
+  <!-- LEFT: spoilage -->
+  <rect x="90" y="395" width="360" height="55" fill="#2e86ab" class="step"/>
+  <text x="270" y="418" class="step-text">Check A: Is it going bad (too wet)?</text>
+  <text x="270" y="434" class="step-sub">spoilage_risk_service — humidity, gas, stalled weight</text>
+
+  <line x1="270" y1="450" x2="270" y2="485" stroke="#444" stroke-width="1.6" marker-end="url(#arrow2)"/>
+  <rect x="120" y="490" width="300" height="45" fill="#fff" stroke="#2e86ab" stroke-width="1.4" rx="10"/>
+  <text x="270" y="516" text-anchor="middle" font-size="12.5" fill="#0d2b52">Shows Low / Medium / High badge</text>
+
+  <!-- RIGHT: over-drying -->
+  <rect x="550" y="395" width="360" height="55" fill="#d9534f" class="step"/>
+  <text x="730" y="418" class="step-text">Check B: Is it burning (too hot / done + still heating)?</text>
+  <text x="730" y="434" class="step-sub">overdrying_monitor_service</text>
+
+  <line x1="730" y1="450" x2="730" y2="485" stroke="#444" stroke-width="1.6" marker-end="url(#arrow2)"/>
+
+  <!-- decision diamond -->
+  <polygon points="730,490 850,545 730,600 610,545" fill="#fdf3d0" stroke="#c9a227" stroke-width="1.6"/>
+  <text x="730" y="540" class="decision-text">Has this been</text>
+  <text x="730" y="556" class="decision-text">true for 60+ sec?</text>
+
+  <text x="620" y="530" class="lbl-no">No</text>
+  <line x1="610" y1="545" x2="470" y2="545" stroke="#444" stroke-width="1.3" marker-end="url(#arrow2)"/>
+  <rect x="220" y="518" width="250" height="55" fill="#fff" stroke="#c9a227" stroke-width="1.4" rx="10"/>
+  <text x="345" y="540" text-anchor="middle" font-size="12" fill="#7a5a00" font-weight="700">Show "Medium" warning</text>
+  <text x="345" y="556" text-anchor="middle" font-size="10.5" fill="#7a5a00">— early notice, oven keeps running</text>
+
+  <text x="750" y="620" class="lbl-yes">Yes</text>
+  <line x1="730" y1="600" x2="730" y2="640" stroke="#444" stroke-width="1.6" marker-end="url(#arrow2)"/>
+
+  <!-- High risk / stop -->
+  <rect x="580" y="645" width="300" height="55" fill="#d9534f" class="step"/>
+  <text x="730" y="668" class="step-text">Risk = HIGH</text>
+  <text x="730" y="684" class="step-sub">oven_control_client tells the oven: STOP</text>
+
+  <line x1="730" y1="700" x2="730" y2="735" stroke="#444" stroke-width="1.6" marker-end="url(#arrow2)"/>
+
+  <rect x="580" y="740" width="300" height="55" fill="#0d2b52" class="step"/>
+  <text x="730" y="763" class="step-text">Heater + fan switched off</text>
+  <text x="730" y="779" class="step-sub">Milan's oven confirms: session STOPPED</text>
+
+  <line x1="730" y1="795" x2="730" y2="830" stroke="#444" stroke-width="1.6" marker-end="url(#arrow2)"/>
+
+  <rect x="580" y="835" width="300" height="65" fill="#e8a33d" class="step"/>
+  <text x="730" y="858" class="step-text">Ask OpenAI to explain</text>
+  <text x="730" y="874" class="step-sub">only when risk = HIGH, so it's</text>
+  <text x="730" y="888" class="step-sub">not wasting money on every check</text>
+
+  <line x1="730" y1="900" x2="730" y2="935" stroke="#444" stroke-width="1.6" marker-end="url(#arrow2)"/>
+
+  <rect x="580" y="940" width="300" height="70" fill="#fff" stroke="#e8a33d" stroke-width="1.6" rx="12"/>
+  <text x="730" y="965" text-anchor="middle" font-size="12.5" font-weight="700" fill="#7a5200">Plain-English note saved</text>
+  <text x="730" y="982" text-anchor="middle" font-size="10.5" fill="#7a5200">e.g. "Oven ran too hot for over a</text>
+  <text x="730" y="996" text-anchor="middle" font-size="10.5" fill="#7a5200">minute, check the heater relay."</text>
+
+  <!-- Both paths converge here -->
+  <line x1="730" y1="1010" x2="730" y2="1045" stroke="#444" stroke-width="1.6"/>
+  <line x1="345" y1="573" x2="345" y2="1045" stroke="#444" stroke-width="1.6"/>
+  <line x1="345" y1="1045" x2="730" y2="1045" stroke="#444" stroke-width="1.6"/>
+  <line x1="500" y1="1045" x2="500" y2="1070" stroke="#444" stroke-width="1.6" marker-end="url(#arrow2)"/>
+
+  <rect x="330" y="1075" width="340" height="60" fill="#0d2b52" class="step"/>
+  <text x="500" y="1100" class="step-text">App shows what it sees</text>
+  <text x="500" y="1116" class="step-sub">badges, banners, and the explanation, on the drying screen</text>
+
+  <rect x="290" y="1160" width="420" height="55" fill="#eef3fb" stroke="#1c5aa0" stroke-width="1.4" stroke-dasharray="5,4" rx="12"/>
+  <text x="500" y="1188" text-anchor="middle" font-size="13" fill="#1c5aa0" font-weight="700">↻ Wait 10 seconds, then go back to the top of the loop</text>
+  <line x1="500" y1="1135" x2="500" y2="1160" stroke="#444" stroke-width="1.6" marker-end="url(#arrow2)"/>
+
+</svg>

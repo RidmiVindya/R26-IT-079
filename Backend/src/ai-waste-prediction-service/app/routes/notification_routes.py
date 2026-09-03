@@ -3,6 +3,7 @@ from app.controllers import notification_controller
 
 router = APIRouter()
 
+@router.get("")
 @router.get("/")
 async def get_all_notifications():
     return await notification_controller.get_all_notifications()

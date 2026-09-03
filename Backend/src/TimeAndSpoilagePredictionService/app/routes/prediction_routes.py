@@ -6,18 +6,25 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from app.config import settings
 from app.database import get_predictions_collection
 from app.models.prediction_record import build_prediction_record
 from app.schemas.prediction_schema import (
     DryingTimeRequest,
     DryingTimeResponse,
     ErrorResponse,
+    InitialPredictionRequest,
+    InitialPredictionResponse,
     RecommendationRequest,
     RecommendationResponse,
     SpoilageRiskRequest,
     SpoilageRiskResponse,
 )
 from app.services.drying_time_service import DryingTimeService, get_drying_time_service
+from app.services.initial_prediction_service import (
+    InitialPredictionService,
+    get_initial_prediction_service,
+)
 from app.services.recommendation_service import RecommendationService, get_recommendation_service
 from app.services.spoilage_risk_service import SpoilageRiskService, get_spoilage_risk_service
 from app.utils.helper import new_batch_id
@@ -74,6 +81,62 @@ async def predict_drying_time(
     return DryingTimeResponse(
         batch_id=batch_id,
         predicted_remaining_drying_time_hours=predicted_hours,
+        model_used=model_used,
+        created_at=created_at,
+    )
+
+
+@router.get(
+    "/safety-limits",
+    summary="Drying safety limits applied to every recommendation",
+)
+async def get_safety_limits():
+    """The caps this service enforces before any value reaches the oven.
+
+    Exposed so clients can display/validate against the same limits instead
+    of hardcoding their own copy.
+    """
+    return {
+        "max_temperature_c": settings.MAX_DRYING_TEMPERATURE_C,
+        "min_temperature_c": settings.MIN_DRYING_TEMPERATURE_C,
+        "max_duration_hours": settings.MAX_DRYING_DURATION_HOURS,
+    }
+
+
+@router.post(
+    "/initial",
+    response_model=InitialPredictionResponse,
+    responses={400: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+    summary="Predict recommended temperature and total drying time before drying starts",
+)
+async def predict_initial(
+    payload: InitialPredictionRequest,
+    service: InitialPredictionService = Depends(get_initial_prediction_service),
+):
+    try:
+        temperature, hours, model_used = service.predict(payload)
+    except Exception as exc:
+        logger.exception("Initial prediction failed")
+        raise HTTPException(status_code=500, detail=f"Prediction error: {exc}")
+
+    batch_id = new_batch_id()
+    created_at = datetime.now(timezone.utc)
+
+    await _persist(
+        build_prediction_record(
+            batch_id=batch_id,
+            prediction_type="initial",
+            inputs=payload.model_dump(),
+            predicted_drying_time_hours=hours,
+            recommended_temperature_c=temperature,
+            model_used=model_used,
+        )
+    )
+
+    return InitialPredictionResponse(
+        batch_id=batch_id,
+        recommended_temperature_c=temperature,
+        estimated_total_drying_time_hours=hours,
         model_used=model_used,
         created_at=created_at,
     )

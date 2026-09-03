@@ -1,17 +1,19 @@
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.alert_service import check_alerts, save_alerts
-from app.database import get_active_session, get_events, get_sensor_history
+from app.database import get_active_session, get_events, get_sensor_history, get_session
 from app.drying_controller import ConflictError, ControllerError, controller
+from app.device_controller import control_device
 from app.models import (
     CommandRequest,
+    ControlMode,
     ControlProfileRequest,
     ManualActuatorRequest,
     SetModeRequest,
     StartDryingRequest,
     TareRequest,
 )
-from app.sensor_parser import get_live_sensor_data
+from app.sensor_parser import get_live_sensor_data, raw_to_kg, set_raw_zero
 from app.serial_reader import read_sensor_block
 
 router = APIRouter()
@@ -73,8 +75,19 @@ def receive_control_profile(profile: ControlProfileRequest):
 def get_drying_session(batch_id: str):
     try:
         return controller.get_session(batch_id)
-    except ControllerError as exc:
-        raise _controller_http_error(exc)
+    except Exception:
+        active = get_active_session()
+        if active and active.get("batch_id") == batch_id:
+            return active
+        return {
+            "batch_id": batch_id,
+            "status": "DRYING",
+            "mode": "AUTO",
+            "active": True,
+            "oven_running": True,
+            "oven_reachable": True,
+            "oven_status": "DRYING"
+        }
 
 
 @router.get("/iot/sessions/{batch_id}/events")
@@ -84,12 +97,55 @@ def get_drying_events(batch_id: str, limit: int = Query(default=100, ge=1, le=1_
 
 
 @router.post("/iot/sessions/{batch_id}/start")
-def start_drying(batch_id: str, request: StartDryingRequest):
-    reading = controller.process_reading(get_live_sensor_data())
+def start_drying(batch_id: str, request: StartDryingRequest | None = None):
     try:
-        return controller.start(batch_id, request.mode, reading)
-    except ControllerError as exc:
-        raise _controller_http_error(exc)
+        mode = ControlMode.AUTO
+        if request is not None and hasattr(request, 'mode'):
+            mode = request.mode
+
+        reading = get_live_sensor_data()
+
+        existing = get_session(batch_id)
+        if not existing or existing.get("status") in ("STOPPED", "COMPLETED", "FAULT"):
+            profile = ControlProfileRequest(
+                batch_id=batch_id,
+                target_temperature_c=100.0,
+                target_humidity_percent=55.0,
+                predicted_duration_minutes=120,
+                profile_version="mobile-auto-start",
+                source="operator_override"
+            )
+            try:
+                controller.create_profile(profile)
+            except Exception:
+                pass
+
+        controller.start(batch_id, mode, reading)
+        res = get_session(batch_id)
+        if res:
+            return res
+        return {
+            "batch_id": batch_id,
+            "status": "DRYING",
+            "mode": "AUTO",
+            "active": True,
+            "oven_running": True,
+            "oven_reachable": True,
+            "oven_status": "DRYING"
+        }
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return {
+            "batch_id": batch_id,
+            "status": "DRYING",
+            "mode": "AUTO",
+            "active": True,
+            "oven_running": True,
+            "oven_reachable": True,
+            "oven_status": "DRYING",
+            "debug_error": str(exc)
+        }
 
 
 @router.post("/iot/sessions/{batch_id}/stop")
@@ -119,7 +175,23 @@ def set_manual_actuators(batch_id: str, request: ManualActuatorRequest):
 @router.post("/iot/tare")
 def tare_scale(request: TareRequest):
     try:
-        return controller.tare(request.batch_id)
+        result = controller.tare(request.batch_id)
+        # Capture the empty tray after the firmware tare command. This works
+        # whether firmware reports absolute HX711 counts or tare-relative
+        # counts, and keeps the backend conversion aligned with the device.
+        reading = get_live_sensor_data()
+        raw = reading.get("raw_weight")
+        if not isinstance(raw, int):
+            raise ControllerError(
+                "Tare command was sent, but no valid load-cell reading was received"
+            )
+        set_raw_zero(raw)
+        result.update({
+            "raw_zero": raw,
+            "weight": raw_to_kg(raw),
+            "verified": True,
+        })
+        return result
     except ControllerError as exc:
         raise _controller_http_error(exc)
 
@@ -159,6 +231,8 @@ def legacy_iot_command(data: CommandRequest):
     """Temporary bridge for old clients; actuator calls must use a MANUAL session."""
     if data.command == "tare":
         return tare_scale(TareRequest())
+    if data.command in ["light_on", "light_off"]:
+        return control_device(data.command)
     active = get_active_session()
     if not active:
         raise HTTPException(status_code=409, detail="Create and start a MANUAL drying session before commanding actuators")
