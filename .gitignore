@@ -208,3 +208,6 @@ runs/
 mlruns/
 wandb/
 notebooks/scratch/
+
+# Track Time and Spoilage Prediction model artifacts
+!/Backend/src/TimeAndSpoilagePredictionService/app/ml_models/**
