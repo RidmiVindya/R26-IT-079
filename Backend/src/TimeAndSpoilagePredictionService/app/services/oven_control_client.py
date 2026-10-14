@@ -59,3 +59,41 @@ async def stop_oven(batch_id: str) -> dict:
 
     logger.warning("Auto-stopped oven for batch %s (over-drying safety)", batch_id)
     return resp.json()
+
+
+async def send_control_profile(
+    batch_id: str,
+    target_temperature_c: float,
+    target_humidity_percent: float = 55.0,
+    predicted_duration_minutes: int = 60,
+    profile_version: str = "v1-prediction-service",
+) -> dict:
+    """Send recommended drying targets from TimeAndSpoilagePredictionService to Milan's oven."""
+    url = f"{settings.MILAN_API_URL}/api/iot/control-profiles"
+    payload = {
+        "batch_id": str(batch_id),
+        "target_temperature_c": float(target_temperature_c),
+        "target_humidity_percent": float(target_humidity_percent),
+        "predicted_duration_minutes": int(predicted_duration_minutes),
+        "profile_version": profile_version,
+        "source": "prediction_module",
+        "cooling_duration_seconds": 300,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(url, json=payload)
+            if resp.status_code < 400:
+                logger.info(
+                    "Sent prediction profile to oven for batch %s: temp=%.1fC, duration=%dm",
+                    batch_id, target_temperature_c, predicted_duration_minutes,
+                )
+                return resp.json()
+            else:
+                logger.warning(
+                    "Oven service returned %d on control-profile: %s",
+                    resp.status_code, resp.text[:200],
+                )
+                return {}
+    except Exception as exc:
+        logger.warning("Could not push control profile to oven for %s: %s", batch_id, exc)
+        return {}

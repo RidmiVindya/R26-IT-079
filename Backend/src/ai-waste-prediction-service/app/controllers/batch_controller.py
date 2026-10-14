@@ -714,3 +714,84 @@ async def get_processing_reports():
     return {
         "reports": reports
     }
+
+
+async def get_active_batch():
+    import urllib.request
+    import json
+
+    # 1. Check if port 8003 has an active drying batch
+    try:
+        req = urllib.request.Request("http://127.0.0.1:8003/api/drying/active", headers={"User-Agent": "BatchService"})
+        with urllib.request.urlopen(req, timeout=1.5) as resp:
+            if resp.status == 200:
+                drying_data = json.loads(resp.read().decode("utf-8"))
+                if drying_data and drying_data.get("batchId"):
+                    b_id = drying_data["batchId"]
+                    b_doc = batches_collection.find_one({"batchId": b_id})
+                    if b_doc:
+                        b_doc = serialize_doc(sync_batch_current_weight(b_doc))
+                        b_doc["currentStage"] = "drying_dashboard"
+                        b_doc["dryingDetails"] = drying_data
+                        return {"active": True, "batch": b_doc, "stage": "drying_dashboard"}
+    except Exception:
+        pass
+
+    # 2. Check batches collection for latest uncompleted batch
+    uncompleted = list(batches_collection.find({
+        "processStatus": {"$ne": "completed"}
+    }).sort("createdAt", -1).limit(1))
+
+    if uncompleted:
+        batch = serialize_doc(sync_batch_current_weight(uncompleted[0]))
+        status = str(batch.get("saltingStatus", "")).lower()
+        if status == "completed":
+            stage = "drying_prediction"
+        elif status in ["in progress", "in_progress"]:
+            stage = "salting_monitoring"
+        elif float(batch.get("saltAmount", 0)) > 0:
+            stage = "salt_prediction"
+        else:
+            stage = "waste_prediction"
+        return {"active": True, "batch": batch, "stage": stage}
+
+    return {"active": False, "batch": None, "stage": None}
+
+
+async def end_batch_process(batch_id: str):
+    import urllib.request
+    import json
+
+    batch = batches_collection.find_one({"batchId": batch_id})
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+
+    batches_collection.update_one(
+        {"batchId": batch_id},
+        {
+            "$set": {
+                "processStatus": "completed",
+                "saltingStatus": "Completed",
+                "endedAt": datetime.now(),
+                "updatedAt": datetime.now(),
+            }
+        }
+    )
+
+    # Stop active drying if running for this batch
+    try:
+        req = urllib.request.Request(
+            "http://127.0.0.1:8003/api/drying/stop",
+            data=json.dumps({"reason": "end_process"}).encode("utf-8"),
+            headers={"Content-Type": "application/json", "User-Agent": "BatchService"}
+        )
+        with urllib.request.urlopen(req, timeout=2.0) as resp:
+            pass
+    except Exception:
+        pass
+
+    updated = batches_collection.find_one({"batchId": batch_id})
+    return {
+        "message": "Batch process ended successfully",
+        "batch": serialize_doc(updated),
+    }

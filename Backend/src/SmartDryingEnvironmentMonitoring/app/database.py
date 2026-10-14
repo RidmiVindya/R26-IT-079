@@ -65,11 +65,15 @@ def get_sensor_history(batch_id: str | None, limit: int = 300) -> list[dict]:
         try:
             query = {"batch_id": batch_id} if batch_id else {}
             records = list(sensor_collection.find(query, {"_id": 0}).sort("timestamp", DESCENDING).limit(limit))
+            if not records and batch_id:
+                records = list(sensor_collection.find({}, {"_id": 0}).sort("timestamp", DESCENDING).limit(limit))
             return list(reversed(records))
         except Exception as exc:
             print(f"MongoDB history read failed: {exc}")
     with _lock:
         records = [r for r in _sensor_logs if not batch_id or r.get("batch_id") == batch_id]
+        if not records and batch_id:
+            records = _sensor_logs
         return deepcopy(records[-limit:])
 
 

@@ -133,3 +133,13 @@ that post-tare raw reading as its runtime zero and verifies a `0.000 kg` result.
 The service uses
 an in-memory fallback if MongoDB is unavailable; MongoDB is required for session
 recovery and durable integration testing.
+
+## Raspberry Pi Edge Bridge & Relay Duty Cycle
+
+When the Arduino Nano is plugged into a Raspberry Pi inside the oven:
+- Complete Architecture & Endpoints Contract: [`docs/OVEN_IOT_BRIDGE_SPECIFICATION.md`](../../docs/OVEN_IOT_BRIDGE_SPECIFICATION.md)
+- Raspberry Pi Edge Daemon: [`pi_bridge/pi_oven_bridge.py`](pi_bridge/pi_oven_bridge.py)
+- Systemd Auto-start Service: [`pi_bridge/oven-bridge.service`](pi_bridge/oven-bridge.service)
+- Auto-installer: [`pi_bridge/install_bridge.sh`](pi_bridge/install_bridge.sh)
+- Relay Duty Cycle Protection: 60s ON / 10s REST cycles are enforced on the edge to safeguard mechanical relays and heating elements against welding.
+

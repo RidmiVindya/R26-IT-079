@@ -108,6 +108,68 @@ def parse_sensor_lines(lines: list[str]) -> dict:
     return data
 
 
+import time
+import json
+import urllib.request
+import urllib.error
+from app.settings import PI_BRIDGE_URL, SENSOR_STALE_AFTER_SECONDS
+
+_last_bridge_telemetry: dict | None = None
+_last_bridge_timestamp: float = 0.0
+
+
+def update_bridge_telemetry(payload: dict) -> dict:
+    """Store fresh telemetry pushed directly from the Raspberry Pi bridge."""
+    global _last_bridge_telemetry, _last_bridge_timestamp
+    
+    # Normalize payload into standard reading structure
+    norm = {
+        "device_id": payload.get("device_id", DEVICE_ID),
+        "online": True,
+        "timestamp": datetime.now(timezone.utc),
+        "temperature": float(payload["temperature"]) if payload.get("temperature") is not None else None,
+        "humidity": float(payload["humidity"]) if payload.get("humidity") is not None else None,
+        "ds_temperature": float(payload.get("ds_temperature", payload.get("temperature", 30.0))),
+        "gas": int(payload.get("gas", 250)),
+        "raw_weight": payload.get("raw_weight"),
+        "weight": payload.get("weight") if payload.get("weight") is not None else raw_to_kg(payload.get("raw_weight")),
+        "heater": bool(payload.get("heater", payload.get("actuators", {}).get("heater_physical_relay", False))),
+        "light": bool(payload.get("light", payload.get("actuators", {}).get("light", False))),
+        "fan": bool(payload.get("fan", payload.get("actuators", {}).get("fan", False))),
+        "sensor_errors": payload.get("sensor_errors", []),
+        "relay_duty_cycle": payload.get("relay_duty_cycle") or payload.get("actuators", {}).get("duty_cycle"),
+    }
+    _last_bridge_telemetry = norm
+    _last_bridge_timestamp = time.monotonic()
+    return norm
+
+
 def get_live_sensor_data() -> dict:
+    """
+    Get live sensor data from:
+    1. Fresh pushed Raspberry Pi bridge data (within staleness window)
+    2. Polling Raspberry Pi bridge if PI_BRIDGE_URL is set
+    3. Direct USB serial connection (fallback)
+    """
+    global _last_bridge_telemetry, _last_bridge_timestamp
+
+    # 1. Use fresh pushed telemetry from Pi if available
+    if _last_bridge_telemetry is not None:
+        if (time.monotonic() - _last_bridge_timestamp) <= SENSOR_STALE_AFTER_SECONDS:
+            return dict(_last_bridge_telemetry)
+
+    # 2. If PI_BRIDGE_URL is configured, query the Pi HTTP endpoint directly
+    if PI_BRIDGE_URL:
+        try:
+            req = urllib.request.Request(f"{PI_BRIDGE_URL}/api/telemetry")
+            with urllib.request.urlopen(req, timeout=1.5) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    return update_bridge_telemetry(data)
+        except Exception:
+            pass
+
+    # 3. Direct local USB serial fallback
     return parse_sensor_lines(read_sensor_block())
+
 

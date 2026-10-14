@@ -91,6 +91,7 @@ class DryingSession(BaseModel):
     profile_source: str
     predicted_duration_minutes: int | None = None
     duration_ends_at: datetime | None = None
+    remaining_duration_seconds: int | None = None
     cooling_duration_seconds: int = 300
     initial_weight_kg: float | None = None
     completion_weight_kg: float | None = None

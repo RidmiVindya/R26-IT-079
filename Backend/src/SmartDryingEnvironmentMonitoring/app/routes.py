@@ -96,6 +96,88 @@ def get_drying_events(batch_id: str, limit: int = Query(default=100, ge=1, le=1_
     return {"batch_id": batch_id, "events": get_events(batch_id, limit)}
 
 
+@router.put("/iot/sessions/{batch_id}/duration")
+def update_session_duration(batch_id: str, payload: dict):
+    """Synchronization endpoint called by TimeAndSpoilagePredictionService (port 8003)."""
+    from datetime import timedelta
+    from app.database import update_session, utcnow
+    rem_hours = payload.get("remaining_hours")
+    if rem_hours is not None and float(rem_hours) > 0:
+        rem_seconds = int(float(rem_hours) * 3600)
+        synced_ends_at = utcnow() + timedelta(seconds=rem_seconds)
+        synced_mins = max(1, int(round(float(rem_hours) * 60)))
+        update_session(
+            batch_id,
+            duration_ends_at=synced_ends_at,
+            predicted_duration_minutes=synced_mins,
+        )
+        return {
+            "success": True,
+            "batch_id": batch_id,
+            "duration_ends_at": synced_ends_at.isoformat(),
+            "predicted_duration_minutes": synced_mins,
+        }
+    return {"success": False, "error": "Invalid remaining_hours"}
+
+
+def _fetch_prediction_profile(batch_id: str, reading: dict) -> tuple[float, float, int]:
+    """Fetch recommended target temperature, humidity, and duration from TimeAndSpoilagePredictionService (port 8003)."""
+    import urllib.request
+    import json
+
+    # 1. First check if active batch on prediction service has pre-calculated target and hours
+    try:
+        req = urllib.request.Request("http://127.0.0.1:8003/api/drying/active", headers={"User-Agent": "SmartDrying"})
+        with urllib.request.urlopen(req, timeout=3.0) as resp:
+            data = json.loads(resp.read().decode())
+            if data and data.get("batchId") == batch_id:
+                temp = data.get("initialTemperatureC")
+                hours = data.get("initialTotalHours")
+                if temp is not None and hours is not None and float(hours) > 0:
+                    return float(temp), 55.0, max(1, int(round(float(hours) * 60)))
+    except Exception:
+        pass
+
+    # 2. Query initial prediction endpoint from TimeAndSpoilagePredictionService
+    try:
+        fish_type = "linna"
+        weight = float(reading.get("weight") or 1.0)
+        try:
+            b_req = urllib.request.Request(f"http://127.0.0.1:8001/api/batches/{batch_id}", headers={"User-Agent": "SmartDrying"})
+            with urllib.request.urlopen(b_req, timeout=3.0) as b_resp:
+                b_data = json.loads(b_resp.read().decode())
+                batch_info = b_data.get("batch") or {}
+                if batch_info.get("fishType"):
+                    fish_type = str(batch_info["fishType"]).lower()
+                cleaned_w = batch_info.get("cleanedWeight") or batch_info.get("rawWeight")
+                if cleaned_w and float(cleaned_w) > 0:
+                    weight = float(cleaned_w)
+        except Exception:
+            pass
+
+        pred_payload = json.dumps({
+            "fish_type": fish_type,
+            "initial_weight_kg": weight,
+            "humidity_percent": float(reading.get("humidity") or 60.0),
+            "mq136_value": float(reading.get("gas") or 200.0)
+        }).encode("utf-8")
+        pred_req = urllib.request.Request(
+            "http://127.0.0.1:8003/api/predict/initial",
+            data=pred_payload,
+            headers={"Content-Type": "application/json", "User-Agent": "SmartDrying"}
+        )
+        with urllib.request.urlopen(pred_req, timeout=3.0) as pred_resp:
+            p_data = json.loads(pred_resp.read().decode())
+            temp = p_data.get("recommended_temperature_c")
+            hours = p_data.get("estimated_total_drying_time_hours")
+            if temp is not None and hours is not None and float(hours) > 0:
+                return float(temp), 55.0, max(1, int(round(float(hours) * 60)))
+    except Exception:
+        pass
+
+    return 100.0, 55.0, 60
+
+
 @router.post("/iot/sessions/{batch_id}/start")
 def start_drying(batch_id: str, request: StartDryingRequest | None = None):
     try:
@@ -106,14 +188,21 @@ def start_drying(batch_id: str, request: StartDryingRequest | None = None):
         reading = get_live_sensor_data()
 
         existing = get_session(batch_id)
-        if not existing or existing.get("status") in ("STOPPED", "COMPLETED", "FAULT"):
+        is_paused = (
+            existing is not None
+            and existing.get("status") == "STOPPED"
+            and existing.get("remaining_duration_seconds") is not None
+            and existing.get("remaining_duration_seconds", 0) > 0
+        )
+        if not existing or (existing.get("status") in ("STOPPED", "COMPLETED", "FAULT") and not is_paused):
+            target_temp, target_hum, pred_mins = _fetch_prediction_profile(batch_id, reading)
             profile = ControlProfileRequest(
                 batch_id=batch_id,
-                target_temperature_c=100.0,
-                target_humidity_percent=55.0,
-                predicted_duration_minutes=120,
-                profile_version="mobile-auto-start",
-                source="operator_override"
+                target_temperature_c=target_temp,
+                target_humidity_percent=target_hum,
+                predicted_duration_minutes=pred_mins,
+                profile_version="v1-prediction-service",
+                source="prediction_module"
             )
             try:
                 controller.create_profile(profile)
@@ -146,6 +235,15 @@ def start_drying(batch_id: str, request: StartDryingRequest | None = None):
             "oven_status": "DRYING",
             "debug_error": str(exc)
         }
+
+
+@router.post("/iot/stop")
+@router.post("/iot/sessions/stop")
+def stop_all_drying():
+    """Emergency and universal stop for any active drying session and turns off heater/fan."""
+    active = get_active_session()
+    batch_id = active["batch_id"] if active else "active"
+    return controller.stop(batch_id, reason="operator_end_process")
 
 
 @router.post("/iot/sessions/{batch_id}/stop")
@@ -247,3 +345,89 @@ def legacy_iot_command(data: CommandRequest):
         return controller.manual_actuators(active["batch_id"], values.get("heater"), values.get("fan"))
     except ControllerError as exc:
         raise _controller_http_error(exc)
+
+
+from fastapi.responses import StreamingResponse
+from app.sensor_parser import update_bridge_telemetry
+from app.device_controller import get_latest_actuator_targets
+from app.settings import HEATER_DUTY_CYCLE_ON_SECONDS, HEATER_DUTY_CYCLE_REST_SECONDS, PI_BRIDGE_URL
+import urllib.request
+import urllib.error
+
+
+@router.post("/iot/bridge/telemetry")
+def receive_bridge_telemetry(payload: dict):
+    """
+    Receives live sensor readings & relay status directly from Raspberry Pi.
+    Returns current actuator commands (heater, fan, light) & duty cycle settings.
+    """
+    reading = update_bridge_telemetry(payload)
+    active = get_active_session()
+    
+    # Process reading through controller if session is active
+    try:
+        controller.process_reading(reading)
+    except Exception:
+        pass
+
+    # Determine desired actuator commands for Raspberry Pi to apply
+    commands = get_latest_actuator_targets()
+    if active:
+        commands["heater"] = active.get("heater_commanded", commands.get("heater", False))
+        commands["fan"] = active.get("fan_commanded", commands.get("fan", False))
+        commands["light"] = active.get("light_commanded", commands.get("light", False))
+
+    return {
+        "success": True,
+        "session_active": bool(active),
+        "status": active.get("status") if active else "IDLE",
+        "commands": {
+            "heater": commands["heater"],
+            "fan": commands["fan"],
+            "light": commands["light"],
+            "duty_cycle_on_seconds": HEATER_DUTY_CYCLE_ON_SECONDS,
+            "duty_cycle_rest_seconds": HEATER_DUTY_CYCLE_REST_SECONDS,
+        }
+    }
+
+
+@router.get("/iot/bridge/commands")
+def get_bridge_commands():
+    """Poll endpoint for Raspberry Pi to get desired actuator states."""
+    active = get_active_session()
+    commands = get_latest_actuator_targets()
+    if active:
+        commands["heater"] = active.get("heater_commanded", commands.get("heater", False))
+        commands["fan"] = active.get("fan_commanded", commands.get("fan", False))
+        commands["light"] = active.get("light_commanded", commands.get("light", False))
+    return {
+        "commands": commands,
+        "duty_cycle": {
+            "on_seconds": HEATER_DUTY_CYCLE_ON_SECONDS,
+            "rest_seconds": HEATER_DUTY_CYCLE_REST_SECONDS,
+        },
+        "session": active,
+    }
+
+
+@router.get("/iot/camera/stream")
+def get_camera_stream():
+    """Proxy live MJPEG video stream from Raspberry Pi if PI_BRIDGE_URL is set."""
+    if not PI_BRIDGE_URL:
+        raise HTTPException(status_code=503, detail="PI_BRIDGE_URL is not configured in backend environment")
+    try:
+        def stream_generator():
+            req = urllib.request.Request(f"{PI_BRIDGE_URL}/api/camera/stream")
+            with urllib.request.urlopen(req, timeout=10) as r:
+                while True:
+                    chunk = r.read(1024)
+                    if not chunk:
+                        break
+                    yield chunk
+        return StreamingResponse(
+            stream_generator(),
+            media_type="multipart/x-mixed-replace; boundary=frame"
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to connect to Raspberry Pi camera stream: {exc}")
+

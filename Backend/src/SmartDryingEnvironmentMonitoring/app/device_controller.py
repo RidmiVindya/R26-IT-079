@@ -1,4 +1,33 @@
+import json
+import urllib.request
+import urllib.error
 from app.serial_reader import send_command
+from app.settings import PI_BRIDGE_URL
+
+_latest_actuator_targets = {
+    "heater": False,
+    "fan": False,
+    "light": False
+}
+
+
+def _http_post_json(url: str, payload: dict, timeout: float = 2.0) -> bool:
+    try:
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=data,
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status in (200, 201)
+    except Exception as exc:
+        print(f"Bridge HTTP POST {url} error: {exc}")
+        return False
+
+
+def get_latest_actuator_targets() -> dict:
+    return dict(_latest_actuator_targets)
 
 
 def control_device(command: str):
@@ -21,6 +50,30 @@ def control_device(command: str):
             "message": "Invalid command"
         }
 
+    # Update commanded targets
+    if command == "heater_on":
+        _latest_actuator_targets["heater"] = True
+    elif command == "heater_off":
+        _latest_actuator_targets["heater"] = False
+    elif command == "fan_on":
+        _latest_actuator_targets["fan"] = True
+    elif command == "fan_off":
+        _latest_actuator_targets["fan"] = False
+    elif command == "light_on":
+        _latest_actuator_targets["light"] = True
+    elif command == "light_off":
+        _latest_actuator_targets["light"] = False
+
+    # Send via Pi Bridge if configured
+    if PI_BRIDGE_URL:
+        if command == "tare":
+            if _http_post_json(f"{PI_BRIDGE_URL}/api/tare", {}):
+                return {"success": True, "command": command, "bridge": True}
+        else:
+            if _http_post_json(f"{PI_BRIDGE_URL}/api/command", {"command": command}):
+                return {"success": True, "command": command, "bridge": True}
+
+    # Fallback to direct USB serial
     success = send_command(command_map[command])
 
     if success:
@@ -41,6 +94,22 @@ def set_actuator_states(
     light: bool | None = None,
 ) -> dict:
     """Apply only requested states. Arduino firmware acknowledgement is still required."""
+    if heater is not None:
+        _latest_actuator_targets["heater"] = heater
+    if fan is not None:
+        _latest_actuator_targets["fan"] = fan
+    if light is not None:
+        _latest_actuator_targets["light"] = light
+
+    if PI_BRIDGE_URL:
+        payload = {}
+        if heater is not None: payload["heater"] = heater
+        if fan is not None: payload["fan"] = fan
+        if light is not None: payload["light"] = light
+        if _http_post_json(f"{PI_BRIDGE_URL}/api/actuators", payload):
+            return {"success": True, "bridge": True}
+
+
     commands: list[str] = []
     if heater is not None:
         commands.append("heater_on" if heater else "heater_off")

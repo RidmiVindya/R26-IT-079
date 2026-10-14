@@ -46,7 +46,12 @@ class DryingTimeService:
         self._load_model()
 
     def _load_model(self) -> None:
-        if not os.path.exists(self._model_path):
+        model_path = self._model_path
+        if not os.path.exists(model_path):
+            alt_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "ml_models", "drying_time_model.pkl")
+            if os.path.exists(alt_path):
+                model_path = alt_path
+        if not os.path.exists(model_path):
             logger.warning(
                 "Drying time model not found at %s — using rule-based fallback.",
                 self._model_path,
@@ -54,7 +59,7 @@ class DryingTimeService:
             self._model = None
             return
         try:
-            self._model = joblib.load(self._model_path)
+            self._model = joblib.load(model_path)
             logger.info("Drying time model loaded from %s", self._model_path)
         except Exception as exc:
             logger.error("Failed to load drying time model: %s — using fallback.", exc)

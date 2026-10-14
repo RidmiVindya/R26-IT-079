@@ -1,0 +1,21 @@
+[Unit]
+Description=Smart Karawala Raspberry Pi Oven Controller & Data Bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/oven_bridge
+Environment="PATH=/home/pi/oven_bridge/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="SERVER_PORT=5000"
+Environment="BACKEND_URL=http://192.168.8.100:8002"
+Environment="PUSH_TO_BACKEND=true"
+Environment="HEATER_DUTY_CYCLE_ON_SECONDS=60"
+Environment="HEATER_DUTY_CYCLE_REST_SECONDS=10"
+ExecStart=/home/pi/oven_bridge/.venv/bin/python3 /home/pi/oven_bridge/pi_oven_bridge.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

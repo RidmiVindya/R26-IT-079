@@ -92,6 +92,11 @@ class DryingController:
                     target_temperature_c=profile.target_temperature_c,
                     target_humidity_percent=profile.target_humidity_percent,
                     predicted_duration_minutes=profile.predicted_duration_minutes,
+                    remaining_duration_seconds=(
+                        profile.predicted_duration_minutes * 60
+                        if profile.predicted_duration_minutes
+                        else None
+                    ),
                     updated_at=utcnow(),
                 )
                 updated = get_session(profile.batch_id)
@@ -134,6 +139,11 @@ class DryingController:
                 "profile_source": profile.source,
                 "predicted_duration_minutes": profile.predicted_duration_minutes,
                 "duration_ends_at": None,
+                "remaining_duration_seconds": (
+                    profile.predicted_duration_minutes * 60
+                    if profile.predicted_duration_minutes
+                    else None
+                ),
                 "cooling_duration_seconds": profile.cooling_duration_seconds,
                 "initial_weight_kg": None,
                 "completion_weight_kg": None,
@@ -205,13 +215,25 @@ class DryingController:
             initial_weight = round(float(weight_val if weight_val is not None else 0.050), 3)
             temp_val = reading.get("temperature")
             current_temp = float(temp_val if temp_val is not None else 30.0)
-            # Always establish a known safe relay state before starting a new batch.
+            # Turn on chamber light for visual inspection and camera streaming during drying.
             try:
-                set_actuator_states(heater=False, fan=False, light=False)
+                set_actuator_states(heater=False, fan=False, light=True)
             except Exception:
                 pass
             started_at = utcnow()
             duration_minutes = session.get("predicted_duration_minutes")
+            remaining_seconds = session.get("remaining_duration_seconds")
+
+            if remaining_seconds is not None and remaining_seconds > 0:
+                duration_ends_at = started_at + timedelta(seconds=remaining_seconds)
+                predicted_duration_minutes = max(1, int(round(remaining_seconds / 60)))
+            elif duration_minutes:
+                duration_ends_at = started_at + timedelta(minutes=duration_minutes)
+                predicted_duration_minutes = duration_minutes
+            else:
+                duration_ends_at = None
+                predicted_duration_minutes = None
+
             updates = {
                 "mode": mode.value if hasattr(mode, "value") else str(mode),
                 "status": DryingStatus.DRYING.value,
@@ -220,11 +242,9 @@ class DryingController:
                 "current_weight_kg": initial_weight,
                 "current_temperature_c": current_temp,
                 "started_at": started_at,
-                "duration_ends_at": (
-                    started_at + timedelta(minutes=duration_minutes)
-                    if duration_minutes
-                    else None
-                ),
+                "predicted_duration_minutes": predicted_duration_minutes,
+                "duration_ends_at": duration_ends_at,
+                "remaining_duration_seconds": None,
                 "last_sensor_at": reading["timestamp"],
                 "fault_reason": None,
                 "stopped_at": None,
@@ -234,8 +254,9 @@ class DryingController:
                 "completion_event_emitted": False,
                 "heater_commanded": False,
                 "fan_commanded": False,
-                "light_commanded": False,
+                "light_commanded": True,
             }
+
             self._clear_sensor_failures(batch_id)
             session = update_session(batch_id, **updates)
             save_event(batch_id, "DRYING_STARTED", {
@@ -307,20 +328,67 @@ class DryingController:
 
     def stop(self, batch_id: str, reason: str = "operator_stop") -> DryingSession:
         with self._lock:
-            session = get_session(batch_id)
+            # 1. Force hardware actuators off immediately (heater, fan, light)
+            try:
+                set_actuator_states(heater=False, fan=False, light=False)
+            except Exception as e:
+                print(f"Error turning off actuators in stop: {e}")
+
+            session = get_session(batch_id) if batch_id and batch_id not in ("active", "current") else None
             if not session:
-                raise ControllerError("Drying session not found")
-            if session["status"] in {DryingStatus.STOPPED.value, DryingStatus.COMPLETED.value}:
-                return self._model(session)
-            session = self._apply_actuators(session, heater=False, fan=False, light=False)
+                active = get_active_session()
+                if active:
+                    session = active
+                    batch_id = active["batch_id"]
+
+            if not session:
+                save_event(batch_id or "UNKNOWN", "DRYING_STOPPED", {"reason": reason, "remaining_seconds": 0})
+                now = utcnow()
+                fallback_dict = {
+                    "batch_id": batch_id or "UNKNOWN",
+                    "status": DryingStatus.STOPPED.value,
+                    "mode": ControlMode.AUTO.value,
+                    "target_temperature_c": 0.0,
+                    "target_humidity_percent": 0.0,
+                    "predicted_duration_minutes": 0,
+                    "heater_commanded": False,
+                    "fan_commanded": False,
+                    "light_commanded": False,
+                    "stop_reason": reason,
+                    "profile_version": "v1",
+                    "profile_source": "system",
+                    "created_at": now,
+                    "updated_at": now,
+                    "stopped_at": now,
+                }
+                return self._model(fallback_dict)
+
+            now = utcnow()
+            duration_ends_at = session.get("duration_ends_at")
+            remaining_seconds = None
+            if duration_ends_at:
+                if isinstance(duration_ends_at, str):
+                    try:
+                        duration_ends_at = datetime.fromisoformat(duration_ends_at)
+                    except Exception:
+                        duration_ends_at = None
+                if duration_ends_at and isinstance(duration_ends_at, datetime):
+                    if duration_ends_at.tzinfo is None:
+                        duration_ends_at = duration_ends_at.replace(tzinfo=timezone.utc)
+                    remaining_seconds = max(0, int((duration_ends_at - now).total_seconds()))
+
             session = update_session(
                 batch_id,
                 status=DryingStatus.STOPPED.value,
-                stopped_at=utcnow(),
+                heater_commanded=False,
+                fan_commanded=False,
+                light_commanded=False,
+                stopped_at=now,
                 stop_reason=reason,
                 fault_reason=None,
+                remaining_duration_seconds=remaining_seconds,
             )
-            save_event(batch_id, "DRYING_STOPPED", {"reason": reason})
+            save_event(batch_id, "DRYING_STOPPED", {"reason": reason, "remaining_seconds": remaining_seconds})
             return self._model(session)
 
     def process_reading(self, reading: dict) -> dict:
@@ -434,7 +502,7 @@ class DryingController:
             elif humidity <= session["target_humidity_percent"] - HUMIDITY_TOLERANCE_PERCENT:
                 fan = False
 
-        return self._apply_actuators(session, heater=heater, fan=fan)
+        return self._apply_actuators(session, heater=heater, fan=fan, light=True)
 
     def _manual_target_control(self, session: dict, reading: dict) -> dict:
         """Apply only the temperature/humidity values entered by the operator."""
@@ -442,7 +510,7 @@ class DryingController:
         humidity = float(reading["humidity"])
         heater = temperature < session["target_temperature_c"]
         exhaust_fan = humidity > session["target_humidity_percent"]
-        return self._apply_actuators(session, heater=heater, fan=exhaust_fan)
+        return self._apply_actuators(session, heater=heater, fan=exhaust_fan, light=True)
 
     def _apply_actuators(
         self,

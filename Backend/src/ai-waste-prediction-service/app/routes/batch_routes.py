@@ -36,6 +36,12 @@ async def get_processing_reports():
     return await batch_controller.get_processing_reports()
 
 
+@router.get("/active")
+@router.get("/active/")
+async def get_active_batch():
+    return await batch_controller.get_active_batch()
+
+
 # -----------------------------
 # Batch Actions
 # -----------------------------
@@ -68,6 +74,11 @@ async def complete_salting(batch_id: str):
 @router.post("/{batch_id}/send-waste-notification")
 async def send_waste_notification(batch_id: str):
     return await batch_controller.send_waste_notification(batch_id)
+
+
+@router.post("/{batch_id}/end-process")
+async def end_batch_process(batch_id: str):
+    return await batch_controller.end_batch_process(batch_id)
 
 
 # -----------------------------

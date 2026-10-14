@@ -1,4 +1,8 @@
 import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env", override=True)
 
 
 def _float_setting(name: str, default: float) -> float:
@@ -13,6 +17,7 @@ def _int_setting(name: str, default: int) -> int:
         return int(os.getenv(name, default))
     except ValueError:
         return default
+
 
 
 # These are operational defaults, not fish-specific drying recommendations.
@@ -44,3 +49,8 @@ WEIGHT_INCREASE_TOLERANCE_FRACTION = _float_setting(
 )
 SENSOR_SAVE_INTERVAL_SECONDS = _int_setting("SENSOR_SAVE_INTERVAL_SECONDS", 10)
 SENSOR_STALE_AFTER_SECONDS = _int_setting("SENSOR_STALE_AFTER_SECONDS", 30)
+
+# Raspberry Pi Hardware Bridge settings
+PI_BRIDGE_URL = os.getenv("PI_BRIDGE_URL", "").rstrip("/")
+HEATER_DUTY_CYCLE_ON_SECONDS = _int_setting("HEATER_DUTY_CYCLE_ON_SECONDS", 60)
+HEATER_DUTY_CYCLE_REST_SECONDS = _int_setting("HEATER_DUTY_CYCLE_REST_SECONDS", 10)

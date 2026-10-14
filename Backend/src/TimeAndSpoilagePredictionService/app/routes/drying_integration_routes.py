@@ -28,6 +28,7 @@ from app.schemas.prediction_schema import (
     SpoilageRiskResponse,
     DryingTimeRequest,
     SpoilageRiskRequest,
+    InitialPredictionRequest,
     Factor,
 )
 from app.services import active_batch_store
@@ -39,9 +40,13 @@ from app.services.batch_client import (
 )
 from app.services import llm_reasoning_service, overdrying_monitor_service
 from app.services.drying_time_service import DryingTimeService, get_drying_time_service
-from app.services.initial_prediction_service import InitialPredictionService
+from app.services.initial_prediction_service import (
+    InitialPredictionService,
+    get_initial_prediction_service,
+)
 from app.services.oven_control_client import (
     OvenControlUnavailableError,
+    send_control_profile,
     stop_oven,
 )
 from app.services.sensor_client import (
@@ -257,6 +262,40 @@ async def start_drying(
     if initial_weight <= 0:
         initial_weight = 2.051
 
+    # If temperature or drying hours were not supplied, predict them using InitialPredictionService
+    if initial_temperature_c is None or initial_total_hours is None:
+        sensor_humidity = 60.0
+        sensor_gas = 200.0
+        try:
+            sensor = await fetch_live_reading()
+            if sensor.get("humidity") is not None:
+                sensor_humidity = float(sensor["humidity"])
+            if sensor.get("gas") is not None:
+                sensor_gas = float(sensor["gas"])
+        except Exception:
+            pass
+
+        try:
+            pred_svc = get_initial_prediction_service()
+            init_req = InitialPredictionRequest(
+                fish_type=fish_type,
+                initial_weight_kg=initial_weight,
+                humidity_percent=sensor_humidity,
+                mq136_value=sensor_gas,
+            )
+            pred_temp, pred_hours, _ = pred_svc.predict(init_req)
+            if initial_temperature_c is None:
+                initial_temperature_c = pred_temp
+            if initial_total_hours is None:
+                initial_total_hours = pred_hours
+        except Exception as exc:
+            logger.warning("Failed to auto-compute initial prediction: %s", exc)
+
+    if initial_temperature_c is not None and initial_total_hours is not None:
+        initial_temperature_c, initial_total_hours = InitialPredictionService.apply_safety_limits(
+            float(initial_temperature_c), float(initial_total_hours)
+        )
+
     record = await active_batch_store.set_active_batch(
         batch_id=str(batch_id),
         fish_type=fish_type,
@@ -270,6 +309,19 @@ async def start_drying(
         ),
         oven_session_id=str(oven_session_id) if oven_session_id else None,
     )
+
+    # Immediately dispatch the predicted control profile to the oven service
+    if initial_temperature_c is not None and initial_total_hours is not None:
+        duration_mins = max(1, int(round(float(initial_total_hours) * 60.0)))
+        asyncio.create_task(
+            send_control_profile(
+                batch_id=str(batch_id),
+                target_temperature_c=float(initial_temperature_c),
+                target_humidity_percent=55.0,
+                predicted_duration_minutes=duration_mins,
+                profile_version="v1-prediction-service",
+            )
+        )
 
     return {
         "message": "Drying started for batch",
@@ -312,11 +364,19 @@ async def get_active():
 async def stop_drying():
     active = await active_batch_store.get_active_batch()
     await active_batch_store.clear_active_batch()
+    batch_id = active.get("batch_id") if active else "active"
     if active and active.get("batch_id"):
         # Drop per-run state so a later batch cannot inherit this run's
         # elapsed over-drying timers or its explanations.
         overdrying_monitor_service.clear_state(active["batch_id"])
         llm_reasoning_service.clear_state(active["batch_id"])
+
+    # Always ensure the physical oven on port 8002 is commanded to STOP
+    try:
+        await stop_oven(batch_id)
+    except Exception as exc:
+        logger.warning("Could not stop oven during /stop: %s", exc)
+
     return {
         "message": "Drying stopped",
         "batchId": active.get("batch_id") if active else None,
@@ -389,7 +449,17 @@ async def _oven_state(batch_id: str) -> dict[str, Any]:
 def _seeded_drying_time_response(active: dict[str, Any], elapsed: float) -> DryingTimeResponse:
     total_hours = active.get("initial_total_hours")
     if total_hours is None or float(total_hours) <= 0:
-        total_hours = 2.0
+        try:
+            pred_svc = get_initial_prediction_service()
+            req = InitialPredictionRequest(
+                fish_type=active.get("fish_type", "linna"),
+                initial_weight_kg=float(active.get("initial_weight_kg") or 1.0),
+                humidity_percent=60.0,
+                mq136_value=200.0,
+            )
+            _, total_hours, _ = pred_svc.predict(req)
+        except Exception:
+            total_hours = 1.0
     remaining = max(0.05, float(total_hours) - elapsed)
 
     return DryingTimeResponse(
@@ -486,6 +556,15 @@ async def active_drying_time(
             model_used=model_used,
         )
     )
+
+    try:
+        async with httpx.AsyncClient(timeout=1.0) as sync_client:
+            await sync_client.put(
+                f"{settings.MILAN_API_URL}/api/iot/sessions/{active['batch_id']}/duration",
+                json={"remaining_hours": predicted_hours},
+            )
+    except Exception:
+        pass
 
     return DryingTimeResponse(
         batch_id=active["batch_id"],

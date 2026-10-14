@@ -1,5 +1,8 @@
 from functools import lru_cache
+from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
@@ -12,10 +15,10 @@ class Settings(BaseSettings):
     MONGO_DB_NAME: str = "fish_drying_db"
     MONGO_COLLECTION_PREDICTIONS: str = "prediction_records"
 
-    DRYING_TIME_MODEL_PATH: str = "app/ml_models/drying_time_model.pkl"
-    INITIAL_DRYING_TIME_MODEL_PATH: str = "app/ml_models/initial_drying_time_model.pkl"
-    INITIAL_PREDICTION_MODEL_PATH: str = "app/ml_models/initial_prediction_model.pkl"
-    SPOILAGE_RISK_MODEL_PATH: str = "app/ml_models/spoilage_risk_model.pkl"
+    DRYING_TIME_MODEL_PATH: str = str(_BASE_DIR / "app" / "ml_models" / "drying_time_model.pkl")
+    INITIAL_DRYING_TIME_MODEL_PATH: str = str(_BASE_DIR / "app" / "ml_models" / "initial_drying_time_model.pkl")
+    INITIAL_PREDICTION_MODEL_PATH: str = str(_BASE_DIR / "app" / "ml_models" / "initial_prediction_model.pkl")
+    SPOILAGE_RISK_MODEL_PATH: str = str(_BASE_DIR / "app" / "ml_models" / "spoilage_risk_model.pkl")
 
     # --- Drying safety limits --------------------------------------------
     # Hard caps applied to anything this service recommends to the drying
