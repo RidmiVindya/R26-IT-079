@@ -289,20 +289,22 @@ def backend_pusher_thread():
             with urllib.request.urlopen(req, timeout=2.0) as resp:
                 if resp.status == 200:
                     resp_json = json.loads(resp.read().decode('utf-8'))
+                    session_active = resp_json.get("session_active", False)
                     commands = resp_json.get("commands", {})
-                    # Synchronize actuator commands from backend
-                    if "heater" in commands:
-                        duty_manager.set_heater_request(bool(commands["heater"]))
-                    if "fan" in commands:
-                        f_on = bool(commands["fan"])
-                        if f_on != nano_data['fan']:
-                            nano_data['fan'] = f_on
-                            send_nano_command("f" if f_on else "e")
-                    if "light" in commands:
-                        l_on = bool(commands["light"])
-                        if l_on != nano_data['light']:
-                            nano_data['light'] = l_on
-                            send_nano_command("l" if l_on else "k")
+                    # Synchronize actuator commands from backend only when session is actively running
+                    if session_active:
+                        if "heater" in commands:
+                            duty_manager.set_heater_request(bool(commands["heater"]))
+                        if "fan" in commands:
+                            f_on = bool(commands["fan"])
+                            if f_on != nano_data['fan']:
+                                nano_data['fan'] = f_on
+                                send_nano_command("f" if f_on else "e")
+                        if "light" in commands:
+                            l_on = bool(commands["light"])
+                            if l_on != nano_data['light']:
+                                nano_data['light'] = l_on
+                                send_nano_command("l" if l_on else "k")
         except Exception:
             # Backend may be starting or offline; continue edge operation silently
             pass

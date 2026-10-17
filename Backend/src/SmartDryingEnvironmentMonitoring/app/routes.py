@@ -372,14 +372,15 @@ def receive_bridge_telemetry(payload: dict):
 
     # Determine desired actuator commands for Raspberry Pi to apply
     commands = get_latest_actuator_targets()
-    if active:
-        commands["heater"] = active.get("heater_commanded", commands.get("heater", False))
-        commands["fan"] = active.get("fan_commanded", commands.get("fan", False))
-        commands["light"] = active.get("light_commanded", commands.get("light", False))
+    is_drying = bool(active and active.get("status") in ("DRYING", "COOLING"))
+    if is_drying:
+        commands["heater"] = active.get("heater_commanded", True)
+        commands["fan"] = active.get("fan_commanded", True)
+        commands["light"] = active.get("light_commanded", True)
 
     return {
         "success": True,
-        "session_active": bool(active),
+        "session_active": is_drying,
         "status": active.get("status") if active else "IDLE",
         "commands": {
             "heater": commands["heater"],

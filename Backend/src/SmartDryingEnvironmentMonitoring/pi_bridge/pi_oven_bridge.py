@@ -392,12 +392,14 @@ def backend_pusher_loop():
 
                 # Apply actuator commands sent back by backend
                 commands = data.get("commands", {})
-                if "heater" in commands:
-                    duty_manager.set_heater_request(bool(commands["heater"]))
-                if "fan" in commands:
-                    apply_fan(bool(commands["fan"]))
-                if "light" in commands:
-                    apply_light(bool(commands["light"]))
+                session_active = data.get("session_active", False)
+                if session_active:
+                    if "heater" in commands:
+                        duty_manager.set_heater_request(bool(commands["heater"]))
+                    if "fan" in commands:
+                        apply_fan(bool(commands["fan"]))
+                    if "light" in commands:
+                        apply_light(bool(commands["light"]))
             else:
                 with state_lock:
                     latest_reading["system"]["backend_synced"] = False

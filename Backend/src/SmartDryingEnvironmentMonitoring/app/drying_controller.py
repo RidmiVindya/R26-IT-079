@@ -156,8 +156,8 @@ class DryingController:
                 "stop_reason": None,
                 "fault_reason": None,
                 "last_sensor_at": None,
-                "heater_commanded": False,
-                "fan_commanded": False,
+                "heater_commanded": True,
+                "fan_commanded": True,
                 "light_commanded": False,
                 "completion_event_emitted": False,
                 "created_at": now,
@@ -217,7 +217,7 @@ class DryingController:
             current_temp = float(temp_val if temp_val is not None else 30.0)
             # Turn on chamber light for visual inspection and camera streaming during drying.
             try:
-                set_actuator_states(heater=False, fan=False, light=True)
+                set_actuator_states(heater=True, fan=True, light=True)
             except Exception:
                 pass
             started_at = utcnow()
@@ -252,8 +252,8 @@ class DryingController:
                 "completed_at": None,
                 "cooling_ends_at": None,
                 "completion_event_emitted": False,
-                "heater_commanded": False,
-                "fan_commanded": False,
+                "heater_commanded": True,
+                "fan_commanded": True,
                 "light_commanded": True,
             }
 
@@ -351,8 +351,8 @@ class DryingController:
                     "target_temperature_c": 0.0,
                     "target_humidity_percent": 0.0,
                     "predicted_duration_minutes": 0,
-                    "heater_commanded": False,
-                    "fan_commanded": False,
+                    "heater_commanded": True,
+                    "fan_commanded": True,
                     "light_commanded": False,
                     "stop_reason": reason,
                     "profile_version": "v1",
