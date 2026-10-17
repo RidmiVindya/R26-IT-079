@@ -33,10 +33,6 @@ def raw_to_kg(raw: int | None) -> float | None:
     if not math.isfinite(kg):
         return None
     if kg < 0:
-        # HX711 electrical noise on an empty/resting scale jitters a few
-        # hundred counts around the true zero. A small negative delta is
-        # still "empty", not an invalid reading; only reject a delta too
-        # large to be noise.
         if kg < -0.05:
             return None
         kg = 0.0
@@ -122,22 +118,41 @@ def update_bridge_telemetry(payload: dict) -> dict:
     """Store fresh telemetry pushed directly from the Raspberry Pi bridge."""
     global _last_bridge_telemetry, _last_bridge_timestamp
     
-    # Normalize payload into standard reading structure
+    # Handle envelope wrapper if present: {"success": true, "data": {...}}
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+
+    temp = data.get("temperature") if data.get("temperature") is not None else data.get("temperature_c")
+    hum = data.get("humidity") if data.get("humidity") is not None else data.get("humidity_percent")
+    ds_temp = data.get("ds_temperature") if data.get("ds_temperature") is not None else data.get("ds_temp_c", temp)
+    gas_val = data.get("gas") if data.get("gas") is not None else data.get("gas_raw", 250)
+    raw_wt = data.get("raw_weight") if data.get("raw_weight") is not None else data.get("load_cell_raw")
+    
+    actuators = data.get("actuators", {})
+    heater_val = bool(
+        data.get("heater", data.get("heater_state", actuators.get("heater_physical_relay", False)))
+    )
+    light_val = bool(
+        data.get("light", data.get("light_state", actuators.get("light", False)))
+    )
+    fan_val = bool(
+        data.get("fan", data.get("fan_state", actuators.get("fan", False)))
+    )
+
     norm = {
-        "device_id": payload.get("device_id", DEVICE_ID),
-        "online": True,
+        "device_id": data.get("device_id", DEVICE_ID),
+        "online": temp is not None and hum is not None,
         "timestamp": datetime.now(timezone.utc),
-        "temperature": float(payload["temperature"]) if payload.get("temperature") is not None else None,
-        "humidity": float(payload["humidity"]) if payload.get("humidity") is not None else None,
-        "ds_temperature": float(payload.get("ds_temperature", payload.get("temperature", 30.0))),
-        "gas": int(payload.get("gas", 250)),
-        "raw_weight": payload.get("raw_weight"),
-        "weight": payload.get("weight") if payload.get("weight") is not None else raw_to_kg(payload.get("raw_weight")),
-        "heater": bool(payload.get("heater", payload.get("actuators", {}).get("heater_physical_relay", False))),
-        "light": bool(payload.get("light", payload.get("actuators", {}).get("light", False))),
-        "fan": bool(payload.get("fan", payload.get("actuators", {}).get("fan", False))),
-        "sensor_errors": payload.get("sensor_errors", []),
-        "relay_duty_cycle": payload.get("relay_duty_cycle") or payload.get("actuators", {}).get("duty_cycle"),
+        "temperature": float(temp) if temp is not None else None,
+        "humidity": float(hum) if hum is not None else None,
+        "ds_temperature": float(ds_temp) if ds_temp is not None else None,
+        "gas": int(gas_val) if gas_val is not None else 250,
+        "raw_weight": int(raw_wt) if raw_wt is not None else None,
+        "weight": float(data["weight"]) if data.get("weight") is not None else raw_to_kg(int(raw_wt) if raw_wt is not None else None),
+        "heater": heater_val,
+        "light": light_val,
+        "fan": fan_val,
+        "sensor_errors": data.get("sensor_errors", []),
+        "relay_duty_cycle": data.get("relay_duty_cycle") or data.get("duty_cycle") or actuators.get("duty_cycle"),
     }
     _last_bridge_telemetry = norm
     _last_bridge_timestamp = time.monotonic()
@@ -162,7 +177,7 @@ def get_live_sensor_data() -> dict:
     if PI_BRIDGE_URL:
         try:
             req = urllib.request.Request(f"{PI_BRIDGE_URL}/api/telemetry")
-            with urllib.request.urlopen(req, timeout=1.5) as resp:
+            with urllib.request.urlopen(req, timeout=2.0) as resp:
                 if resp.status == 200:
                     data = json.loads(resp.read().decode("utf-8"))
                     return update_bridge_telemetry(data)
@@ -171,5 +186,3 @@ def get_live_sensor_data() -> dict:
 
     # 3. Direct local USB serial fallback
     return parse_sensor_lines(read_sensor_block())
-
-
