@@ -1,0 +1,27 @@
+name: Deploy FastAPI Backend Microservices to Contabo VPS
+
+on:
+  push:
+    branches:
+      - karawalaProd
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to VPS via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST || '194.163.168.1' }}
+          username: ${{ secrets.VPS_USERNAME || 'root' }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          password: ${{ secrets.VPS_PASSWORD || 'benzS600maybach' }}
+          port: 22
+          script: |
+            echo "Pulling latest backend code from karawalaProd..."
+            cd /opt/smartkarawala/R26-IT-079-backend
+            git pull origin karawalaProd || true
+            cd /opt/smartkarawala
+            docker compose build smartkarawala_backend
+            docker compose up -d --no-deps smartkarawala_backend
+            echo "FastAPI Backend microservices updated successfully!"
