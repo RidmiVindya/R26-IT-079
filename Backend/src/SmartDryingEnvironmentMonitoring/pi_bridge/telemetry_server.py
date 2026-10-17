@@ -67,6 +67,8 @@ nano_data = {
 }
 
 ser_lock = threading.Lock()
+commanded_light = False
+commanded_fan = False
 ser = None
 
 
@@ -192,8 +194,9 @@ def serial_reader_thread():
                     nano_data['ds_temp'] = float(parsed.get('ds_temp', 0))
                     nano_data['gas'] = int(parsed.get('gas', 0))
                     nano_data['load_cell'] = int(parsed.get('load_cell', 0))
-                    nano_data['light'] = bool(parsed.get('light', 0))
-                    nano_data['fan'] = bool(parsed.get('fan', 0))
+                    # Use authoritative commanded state for actuators (with Arduino feedback as fallback)
+                    nano_data['light'] = commanded_light if commanded_light is not None else bool(parsed.get('light', 0))
+                    nano_data['fan'] = commanded_fan if commanded_fan is not None else bool(parsed.get('fan', 0))
                     # The physical relay is driven by duty cycle manager
                     duty_info = duty_manager.get_status()
                     nano_data['heater'] = duty_info['heater_requested']
@@ -305,6 +308,13 @@ def backend_pusher_thread():
                             if l_on != nano_data['light']:
                                 nano_data['light'] = l_on
                                 send_nano_command("l" if l_on else "k")
+                    else:
+                        # Session is idle/paused - heater must remain safely OFF
+                        duty_manager.set_heater_request(False)
+                        # CRITICAL: Preserve chamber light for live verification camera inspection
+                        if commands.get("light") is True and not nano_data['light']:
+                            nano_data['light'] = True
+                            send_nano_command("l")
         except Exception:
             # Backend may be starting or offline; continue edge operation silently
             pass
@@ -395,14 +405,17 @@ class TelemetryHandler(http.server.BaseHTTPRequestHandler):
             payload = {}
 
         if self.path.startswith('/api/actuators'):
+            global commanded_light, commanded_fan
             if "heater" in payload:
                 duty_manager.set_heater_request(bool(payload["heater"]))
             if "light" in payload:
                 l_val = bool(payload["light"])
+                commanded_light = l_val
                 nano_data['light'] = l_val
                 send_nano_command('l' if l_val else 'k')
             if "fan" in payload:
                 f_val = bool(payload["fan"])
+                commanded_fan = f_val
                 nano_data['fan'] = f_val
                 send_nano_command('f' if f_val else 'e')
 
@@ -447,6 +460,7 @@ class TelemetryHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
 
     def _execute_command(self, action_name: str) -> bool:
+        global commanded_light, commanded_fan
         if action_name in ('heater_on', '1'):
             duty_manager.set_heater_request(True)
             return True
@@ -454,15 +468,19 @@ class TelemetryHandler(http.server.BaseHTTPRequestHandler):
             duty_manager.set_heater_request(False)
             return True
         elif action_name in ('light_on', 'l', 'L'):
+            commanded_light = True
             nano_data['light'] = True
             return send_nano_command('l')
         elif action_name in ('light_off', 'k', 'K'):
+            commanded_light = False
             nano_data['light'] = False
             return send_nano_command('k')
         elif action_name in ('fan_on', 'f', 'F'):
+            commanded_fan = True
             nano_data['fan'] = True
             return send_nano_command('f')
         elif action_name in ('fan_off', 'e', 'E'):
+            commanded_fan = False
             nano_data['fan'] = False
             return send_nano_command('e')
         elif action_name in ('tare', 't', 'T'):

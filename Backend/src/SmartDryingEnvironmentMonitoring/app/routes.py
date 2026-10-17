@@ -330,6 +330,13 @@ def legacy_iot_command(data: CommandRequest):
     if data.command == "tare":
         return tare_scale(TareRequest())
     if data.command in ["light_on", "light_off"]:
+        active = get_active_session()
+        res = control_device(data.command)
+        if active and active.get("status") in ("DRYING", "COOLING"):
+            from app.device_controller import _latest_actuator_targets
+            _latest_actuator_targets["heater"] = True
+        return res
+    if data.command in ["heater_on", "heater_off", "fan_on", "fan_off"]:
         return control_device(data.command)
     active = get_active_session()
     if not active:
@@ -377,11 +384,37 @@ def receive_bridge_telemetry(payload: dict):
         commands["heater"] = active.get("heater_commanded", True)
         commands["fan"] = active.get("fan_commanded", True)
         commands["light"] = active.get("light_commanded", True)
+    else:
+        # Check production VPS if local instance is idle
+        import os
+        if not os.getenv("IS_VPS_PRODUCTION"):
+            vps_sync_url = os.getenv("CENTRAL_VPS_BACKEND_URL", "https://api.smartkarawala.me/api/iot/bridge/telemetry")
+            try:
+                import json
+                req_data = json.dumps(payload).encode("utf-8")
+                vps_req = urllib.request.Request(
+                    vps_sync_url,
+                    data=req_data,
+                    headers={"Content-Type": "application/json"}
+                )
+                with urllib.request.urlopen(vps_req, timeout=1.5) as vps_resp:
+                    if vps_resp.status == 200:
+                        vps_data = json.loads(vps_resp.read().decode("utf-8"))
+                        if vps_data.get("session_active"):
+                            is_drying = True
+                            vps_cmds = vps_data.get("commands", {})
+                            commands["heater"] = vps_cmds.get("heater", True)
+                            commands["fan"] = vps_cmds.get("fan", True)
+                            commands["light"] = vps_cmds.get("light", True)
+                        elif vps_data.get("commands", {}).get("light"):
+                            commands["light"] = True
+            except Exception:
+                pass
 
     return {
         "success": True,
         "session_active": is_drying,
-        "status": active.get("status") if active else "IDLE",
+        "status": active.get("status") if active else ("DRYING" if is_drying else "IDLE"),
         "commands": {
             "heater": commands["heater"],
             "fan": commands["fan"],

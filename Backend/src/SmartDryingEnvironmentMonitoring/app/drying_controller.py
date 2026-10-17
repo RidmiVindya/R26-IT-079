@@ -266,9 +266,9 @@ class DryingController:
             })
 
             if mode == ControlMode.AUTO:
-                session = self._automatic_control(session, reading)
+                session = self._automatic_control(session, reading, force=True)
             else:
-                session = self._manual_target_control(session, reading)
+                session = self._manual_target_control(session, reading, force=True)
             return self._model(session)
 
     def set_mode(self, batch_id: str, mode: ControlMode) -> DryingSession:
@@ -490,7 +490,7 @@ class DryingController:
             return False
         return temperature >= session["target_temperature_c"] + MANUAL_HEATER_CUTOFF_MARGIN_C
 
-    def _automatic_control(self, session: dict, reading: dict) -> dict:
+    def _automatic_control(self, session: dict, reading: dict, force: bool = False) -> dict:
         temperature = float(reading.get("temperature", 30.0)) if reading.get("temperature") is not None else 30.0
         humidity = reading.get("humidity")
         heater = True # Always keep heater ON while drying until timer completes
@@ -502,15 +502,15 @@ class DryingController:
             elif humidity <= session["target_humidity_percent"] - HUMIDITY_TOLERANCE_PERCENT:
                 fan = False
 
-        return self._apply_actuators(session, heater=heater, fan=fan, light=True)
+        return self._apply_actuators(session, heater=heater, fan=fan, light=True, force=force)
 
-    def _manual_target_control(self, session: dict, reading: dict) -> dict:
+    def _manual_target_control(self, session: dict, reading: dict, force: bool = False) -> dict:
         """Apply only the temperature/humidity values entered by the operator."""
         temperature = float(reading["temperature"])
         humidity = float(reading["humidity"])
         heater = temperature < session["target_temperature_c"]
         exhaust_fan = humidity > session["target_humidity_percent"]
-        return self._apply_actuators(session, heater=heater, fan=exhaust_fan, light=True)
+        return self._apply_actuators(session, heater=heater, fan=exhaust_fan, light=True, force=force)
 
     def _apply_actuators(
         self,
@@ -518,20 +518,25 @@ class DryingController:
         heater: bool | None,
         fan: bool | None,
         light: bool | None = None,
+        force: bool = False,
     ) -> dict:
         desired_heater = session["heater_commanded"] if heater is None else heater
         desired_fan = session["fan_commanded"] if fan is None else fan
         current_light = session.get("light_commanded", False)
         desired_light = current_light if light is None else light
-        change_heater = desired_heater if desired_heater != session["heater_commanded"] else None
-        change_fan = desired_fan if desired_fan != session["fan_commanded"] else None
-        change_light = desired_light if desired_light != current_light else None
-        if change_heater is None and change_fan is None and change_light is None:
+        change_heater = desired_heater if (force or desired_heater != session["heater_commanded"]) else None
+        change_fan = desired_fan if (force or desired_fan != session["fan_commanded"]) else None
+        change_light = desired_light if (force or desired_light != current_light) else None
+        if not force and change_heater is None and change_fan is None and change_light is None:
             return session
 
         def _do_set():
             try:
-                set_actuator_states(heater=change_heater, fan=change_fan, light=change_light)
+                set_actuator_states(
+                    heater=desired_heater if force else change_heater,
+                    fan=desired_fan if force else change_fan,
+                    light=desired_light if force else change_light
+                )
             except Exception:
                 pass
         import threading
