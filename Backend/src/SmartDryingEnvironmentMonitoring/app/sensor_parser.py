@@ -162,39 +162,43 @@ def update_bridge_telemetry(payload: dict) -> dict:
 def get_live_sensor_data() -> dict:
     """
     Get live sensor data from:
-    1. Fresh pushed Raspberry Pi bridge data (within staleness window)
-    2. Polling Raspberry Pi bridge if PI_BRIDGE_URL is set
-    3. Direct USB serial connection (fallback)
+    1. Fresh bridge telemetry cache (3-second window)
+    2. Polling Raspberry Pi hardware bridge
+    3. Stale cache fallback within SENSOR_STALE_AFTER_SECONDS
+    4. Direct USB serial connection
     """
     global _last_bridge_telemetry, _last_bridge_timestamp
 
-    # 1. Use fresh pushed telemetry from Pi if available
+    # 1. Quick cache: return immediately if fresh reading exists (< 3s old)
     if _last_bridge_telemetry is not None:
-        if (time.monotonic() - _last_bridge_timestamp) <= SENSOR_STALE_AFTER_SECONDS:
+        if (time.monotonic() - _last_bridge_timestamp) <= 3.0:
             return dict(_last_bridge_telemetry)
 
-    # 2. Query Pi hardware bridge across candidate URLs (Docker internal host, local, or configured bridge URL)
-    candidate_urls = [
-        u for u in [
-            PI_BRIDGE_URL,
+    # 2. Query Pi hardware bridge (favor configured PI_BRIDGE_URL or host.docker.internal)
+    candidate_urls = []
+    if PI_BRIDGE_URL:
+        candidate_urls.append(PI_BRIDGE_URL)
+    else:
+        candidate_urls.extend([
             "http://host.docker.internal:8081",
             "http://127.0.0.1:8081",
             "http://172.20.10.2:8081",
-        ] if u
-    ]
-    # Remove duplicates preserving order
-    seen = set()
-    unique_candidates = [u for u in candidate_urls if not (u in seen or seen.add(u))]
+        ])
 
-    for b_url in unique_candidates:
+    for b_url in candidate_urls:
         try:
             req = urllib.request.Request(f"{b_url}/api/telemetry")
-            with urllib.request.urlopen(req, timeout=1.5) as resp:
+            with urllib.request.urlopen(req, timeout=1.2) as resp:
                 if resp.status == 200:
                     data = json.loads(resp.read().decode("utf-8"))
                     return update_bridge_telemetry(data)
         except Exception:
             pass
 
-    # 3. Direct local USB serial fallback
+    # 3. If recent bridge data exists within staleness window, return it
+    if _last_bridge_telemetry is not None:
+        if (time.monotonic() - _last_bridge_timestamp) <= SENSOR_STALE_AFTER_SECONDS:
+            return dict(_last_bridge_telemetry)
+
+    # 4. Direct local USB serial fallback
     return parse_sensor_lines(read_sensor_block())

@@ -488,9 +488,12 @@ class TelemetryHandler(http.server.BaseHTTPRequestHandler):
         return False
 
 
+class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+
 if __name__ == '__main__':
-    socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer(('0.0.0.0', PORT), TelemetryHandler) as httpd:
+    with ThreadedTCPServer(('0.0.0.0', PORT), TelemetryHandler) as httpd:
         print(f'Enhanced Telemetry & Relay Duty Cycle Server running on port {PORT}')
         print(f'Relay Duty Cycle: {DUTY_CYCLE_ON_SECONDS}s ON / {DUTY_CYCLE_REST_SECONDS}s REST')
 
