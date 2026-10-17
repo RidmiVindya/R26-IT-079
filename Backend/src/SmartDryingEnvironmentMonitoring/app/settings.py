@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env", override=True)
+load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env", override=False)
 
 
 def _float_setting(name: str, default: float) -> float:

@@ -101,12 +101,24 @@ def set_actuator_states(
     if light is not None:
         _latest_actuator_targets["light"] = light
 
-    if PI_BRIDGE_URL:
-        payload = {}
-        if heater is not None: payload["heater"] = heater
-        if fan is not None: payload["fan"] = fan
-        if light is not None: payload["light"] = light
-        if _http_post_json(f"{PI_BRIDGE_URL}/api/actuators", payload):
+    candidate_bridge_urls = [
+        u for u in [
+            PI_BRIDGE_URL,
+            "http://host.docker.internal:8081",
+            "http://127.0.0.1:8081",
+            "http://172.20.10.2:8081",
+        ] if u
+    ]
+    seen_urls = set()
+    unique_bridge_urls = [u for u in candidate_bridge_urls if not (u in seen_urls or seen_urls.add(u))]
+
+    payload = {}
+    if heater is not None: payload["heater"] = heater
+    if fan is not None: payload["fan"] = fan
+    if light is not None: payload["light"] = light
+
+    for b_url in unique_bridge_urls:
+        if _http_post_json(f"{b_url}/api/actuators", payload):
             return {"success": True, "bridge": True}
 
 

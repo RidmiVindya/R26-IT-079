@@ -173,11 +173,23 @@ def get_live_sensor_data() -> dict:
         if (time.monotonic() - _last_bridge_timestamp) <= SENSOR_STALE_AFTER_SECONDS:
             return dict(_last_bridge_telemetry)
 
-    # 2. If PI_BRIDGE_URL is configured, query the Pi HTTP endpoint directly
-    if PI_BRIDGE_URL:
+    # 2. Query Pi hardware bridge across candidate URLs (Docker internal host, local, or configured bridge URL)
+    candidate_urls = [
+        u for u in [
+            PI_BRIDGE_URL,
+            "http://host.docker.internal:8081",
+            "http://127.0.0.1:8081",
+            "http://172.20.10.2:8081",
+        ] if u
+    ]
+    # Remove duplicates preserving order
+    seen = set()
+    unique_candidates = [u for u in candidate_urls if not (u in seen or seen.add(u))]
+
+    for b_url in unique_candidates:
         try:
-            req = urllib.request.Request(f"{PI_BRIDGE_URL}/api/telemetry")
-            with urllib.request.urlopen(req, timeout=2.0) as resp:
+            req = urllib.request.Request(f"{b_url}/api/telemetry")
+            with urllib.request.urlopen(req, timeout=1.5) as resp:
                 if resp.status == 200:
                     data = json.loads(resp.read().decode("utf-8"))
                     return update_bridge_telemetry(data)
