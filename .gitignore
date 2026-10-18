@@ -53,17 +53,7 @@ coverage.xml
 # -----------------------------------------------------------------------------
 # Machine Learning / Models / Datasets
 # -----------------------------------------------------------------------------
-*.pkl
-*.joblib
-*.h5
-*.hdf5
-*.pt
-*.pth
-*.ckpt
-*.onnx
-*.pb
-*.tflite
-*.safetensors
+
 
 # Model artifact directories (keep folder, ignore contents)
 **/ml_models/*
