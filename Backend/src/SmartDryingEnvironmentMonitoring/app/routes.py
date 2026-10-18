@@ -387,9 +387,9 @@ def receive_bridge_telemetry(payload: dict):
     else:
         # Forward to central VPS only from local development, never from VPS itself
         import os
-        vps_sync_url = os.getenv("CENTRAL_VPS_BACKEND_URL", "")
-        is_production = os.getenv("IS_VPS_PRODUCTION", "false").lower() in ("1", "true", "yes")
-        if vps_sync_url and not is_production and "smartkarawala.me" not in vps_sync_url:
+        is_production = os.getenv("IS_VPS_PRODUCTION", "false").lower() in ("1", "true", "yes") or os.path.exists("/app/logs")
+        vps_sync_url = os.getenv("CENTRAL_VPS_BACKEND_URL", "https://api.smartkarawala.me/api/iot/bridge/telemetry")
+        if vps_sync_url and not is_production:
             try:
                 import json
                 req_data = json.dumps(payload).encode("utf-8")
