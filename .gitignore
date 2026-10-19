@@ -62,7 +62,7 @@ coverage.xml
 # Datasets (keep folder, ignore contents)
 **/datasets/*
 !**/datasets/.gitkeep
-*.csv
+
 *.tsv
 *.parquet
 *.feather
