@@ -16,6 +16,8 @@ from app.database import (
 from app.device_controller import control_device, set_actuator_states
 from app.models import ControlMode, ControlProfileRequest, DryingSession, DryingStatus
 from app.settings import (
+    DRYING_TEMPERATURE_C,
+    HEATER_RESTART_TEMPERATURE_C,
     HUMIDITY_TOLERANCE_PERCENT,
     MANUAL_HEATER_CUTOFF_MARGIN_C,
     SENSOR_FAULT_AFTER_CONSECUTIVE_FAILURES,
@@ -52,7 +54,27 @@ class DryingController:
 
     @staticmethod
     def _valid_temperature(value) -> bool:
-        return isinstance(value, (float, int)) and math.isfinite(value)
+        return not isinstance(value, bool) and isinstance(value, (float, int)) and math.isfinite(value)
+
+    def _heater_demand(self, session: dict, reading: dict) -> bool:
+        """60C thermostat with 58C restart; unavailable primary sensor means OFF.
+
+        A usable secondary probe can veto heating too. This is a software
+        command, not proof of the physical relay state or a thermal guarantee.
+        """
+        temperature = reading.get("temperature")
+        if not reading.get("online") or not self._valid_temperature(temperature):
+            return False
+        temperatures = [float(temperature)]
+        secondary = reading.get("ds_temperature")
+        if self._valid_temperature(secondary):
+            temperatures.append(float(secondary))
+        hottest = max(temperatures)
+        if hottest >= DRYING_TEMPERATURE_C:
+            return False
+        if hottest <= HEATER_RESTART_TEMPERATURE_C:
+            return True
+        return bool(session.get("heater_commanded", False))
 
     def _register_sensor_failure(self, session: dict, reason: str) -> bool:
         """Count one unusable reading; fault once too many arrive back to back.
@@ -85,6 +107,7 @@ class DryingController:
             existing = get_session(profile.batch_id)
             if existing:
                 if existing["status"] in {DryingStatus.DRYING.value, DryingStatus.COOLING.value}:
+                    existing = update_session(profile.batch_id, target_temperature_c=DRYING_TEMPERATURE_C)
                     return self._model(existing)
                 update_session(
                     profile.batch_id,
@@ -181,19 +204,21 @@ class DryingController:
             session = get_session(batch_id)
             if not session:
                 raise ControllerError("Drying session not found")
+            session = update_session(batch_id, target_temperature_c=DRYING_TEMPERATURE_C)
             if session["status"] == DryingStatus.DRYING.value:
-                # Duplicate starts are intentionally idempotent.
+                # Preserve the run, but a duplicate start cannot bypass an OFF decision.
+                session = self._apply_actuators(
+                    session, heater=self._heater_demand(session, reading), fan=None,
+                )
                 return self._model(session)
             if session["status"] in (DryingStatus.STOPPED.value, DryingStatus.COMPLETED.value, DryingStatus.FAULT.value):
                 update_session(batch_id, status=DryingStatus.READY.value, fault_reason=None, stop_reason=None)
                 session["status"] = DryingStatus.READY.value
-            if not reading.get("online"):
-                reading["online"] = True
-                reading["sensor_errors"] = []
+            if not reading.get("online") or not self._valid_temperature(reading.get("temperature")):
+                self._apply_actuators(session, heater=False, fan=None, force=True)
+                raise ControllerError("A valid online temperature reading is required before heating")
             if not self._valid_weight(reading.get("weight")):
                 reading["weight"] = 0.045
-            if not self._valid_temperature(reading.get("temperature")):
-                reading["temperature"] = 32.0
             if not (
                 isinstance(reading.get("humidity"), (int, float))
                 and math.isfinite(reading.get("humidity", 60.0))
@@ -215,9 +240,10 @@ class DryingController:
             initial_weight = round(float(weight_val if weight_val is not None else 0.050), 3)
             temp_val = reading.get("temperature")
             current_temp = float(temp_val if temp_val is not None else 30.0)
-            # Turn on chamber light for visual inspection and camera streaming during drying.
+            # Decide temperature safety BEFORE the first heater command.
+            initial_heater = self._heater_demand(session, reading)
             try:
-                set_actuator_states(heater=True, fan=True, light=True)
+                set_actuator_states(heater=initial_heater, fan=True, light=True)
             except Exception:
                 pass
             started_at = utcnow()
@@ -252,7 +278,7 @@ class DryingController:
                 "completed_at": None,
                 "cooling_ends_at": None,
                 "completion_event_emitted": False,
-                "heater_commanded": True,
+                "heater_commanded": initial_heater,
                 "fan_commanded": True,
                 "light_commanded": True,
             }
@@ -404,6 +430,11 @@ class DryingController:
             if session["status"] == DryingStatus.READY.value:
                 return reading
 
+            if session["status"] == DryingStatus.DRYING.value:
+                session = update_session(session["batch_id"], target_temperature_c=DRYING_TEMPERATURE_C)
+                if not self._heater_demand(session, reading):
+                    session = self._apply_actuators(session, heater=False, fan=None, force=True)
+
             if not reading.get("online") or reading.get("sensor_errors"):
                 self._register_sensor_failure(session, "Sensor read is missing or invalid")
                 return reading
@@ -493,7 +524,7 @@ class DryingController:
     def _automatic_control(self, session: dict, reading: dict, force: bool = False) -> dict:
         temperature = float(reading.get("temperature", 30.0)) if reading.get("temperature") is not None else 30.0
         humidity = reading.get("humidity")
-        heater = True # Always keep heater ON while drying until timer completes
+        heater = self._heater_demand(session, reading)
         fan = session.get("fan_commanded", True)
 
         if isinstance(humidity, (int, float)) and math.isfinite(humidity):
@@ -505,10 +536,10 @@ class DryingController:
         return self._apply_actuators(session, heater=heater, fan=fan, light=True, force=force)
 
     def _manual_target_control(self, session: dict, reading: dict, force: bool = False) -> dict:
-        """Apply only the temperature/humidity values entered by the operator."""
+        """Use the fixed 60C thermostat and operator humidity target."""
         temperature = float(reading["temperature"])
         humidity = float(reading["humidity"])
-        heater = temperature < session["target_temperature_c"]
+        heater = self._heater_demand(session, reading)
         exhaust_fan = humidity > session["target_humidity_percent"]
         return self._apply_actuators(session, heater=heater, fan=exhaust_fan, light=True, force=force)
 
@@ -539,8 +570,9 @@ class DryingController:
                 )
             except Exception:
                 pass
-        import threading
-        threading.Thread(target=_do_set, daemon=True).start()
+        # Deliver under the controller lock: an older background ON command
+        # must not overtake a later 60C OFF command.
+        _do_set()
         session = update_session(
             session["batch_id"],
             heater_commanded=desired_heater,

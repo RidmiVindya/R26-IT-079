@@ -99,7 +99,7 @@ def test_manual_targets_control_heater_and_exhaust_fan_while_light_is_manual(mon
         cooling_duration_seconds=0,
     ))
 
-    started = controller.start("BATCH-MANUAL", ControlMode.MANUAL, reading(temperature=39.0, humidity=55.0))
+    started = controller.start("BATCH-MANUAL", ControlMode.MANUAL, reading(temperature=59.0, humidity=55.0))
     assert started.heater_commanded is True
     assert started.fan_commanded is True
 
@@ -114,7 +114,7 @@ def test_manual_targets_control_heater_and_exhaust_fan_while_light_is_manual(mon
     assert updated.fan_commanded is True
     assert updated.light_commanded is True
 
-    controller.process_reading(reading(temperature=40.0, humidity=12.0))
+    controller.process_reading(reading(temperature=60.0, humidity=12.0))
     updated = store.get("BATCH-MANUAL")
     assert updated["heater_commanded"] is False
     assert updated["fan_commanded"] is False
@@ -174,10 +174,10 @@ def test_manual_heater_turns_off_at_temperature_target(monkeypatch):
         target_humidity_percent=12,
         source="operator_override",
     ))
-    started = controller.start("BATCH-MANUAL-TEMP", ControlMode.MANUAL, reading(temperature=39.0))
+    started = controller.start("BATCH-MANUAL-TEMP", ControlMode.MANUAL, reading(temperature=59.0))
     assert started.heater_commanded is True
 
-    controller.process_reading(reading(temperature=41.2))
+    controller.process_reading(reading(temperature=61.2))
     session = store.get("BATCH-MANUAL-TEMP")
     assert session["status"] == "DRYING"
     assert session["heater_commanded"] is False

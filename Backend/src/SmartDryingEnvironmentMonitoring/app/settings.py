@@ -20,6 +20,10 @@ def _int_setting(name: str, default: int) -> int:
 
 
 
+# Fixed operating target requested for this dryer. Not overridable by .env.
+DRYING_TEMPERATURE_C = 60.0
+HEATER_RESTART_TEMPERATURE_C = 58.0
+
 # These are operational defaults, not fish-specific drying recommendations.
 TEMPERATURE_TOLERANCE_C = _float_setting("TEMPERATURE_TOLERANCE_C", 2.0)
 HUMIDITY_TOLERANCE_PERCENT = _float_setting("HUMIDITY_TOLERANCE_PERCENT", 3.0)

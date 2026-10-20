@@ -143,3 +143,29 @@ When the Arduino Nano is plugged into a Raspberry Pi inside the oven:
 - Auto-installer: [`pi_bridge/install_bridge.sh`](pi_bridge/install_bridge.sh)
 - Relay Duty Cycle Protection: 60s ON / 10s REST cycles are enforced on the edge to safeguard mechanical relays and heating elements against welding.
 
+
+
+### Fixed 60 C operating target
+
+All positive finite `target_temperature_c` recommendations are normalized to
+60 C in the IoT profile response and stored session, including old 100-150 C
+prediction profiles. AUTO and MANUAL use the same thermostat: heater OFF at
+60 C or above, restart at 58 C or below, retain the previous command between
+58 and 60 C. Drying duration and humidity/fan control remain separate.
+A usable secondary temperature probe can veto heating. An offline or invalid
+primary temperature removes the heating command and cannot start heating.
+Legacy direct `heater_on` commands are rejected; `heater_off` remains available.
+Light commands no longer force the heater command back on. Actuator commands
+are issued in controller order rather than competing background threads.
+
+This is backend thermostat logic, not a physical maximum-temperature guarantee.
+Sensor sampling, thermal inertia, unavailable communications, or a failed relay
+can cause overshoot or prevent an OFF request from reaching the device. Arduino
+firmware and Pi bridge software have not been changed or flashed; they do not
+gain an independent local 60 C cutoff from this change. Use an independently
+verified hardware cutoff. No physical testing or deployment is performed here.
+
+Integration limitation: Prediction Service and Flutter can still display the
+old predicted temperature and duration. IoT applies 60 C but does not recompute
+the duration for it. Those predictions/models require separate calibration and
+UI integration before their displayed values represent this operating mode.

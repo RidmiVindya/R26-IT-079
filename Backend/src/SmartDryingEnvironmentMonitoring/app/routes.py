@@ -331,12 +331,10 @@ def legacy_iot_command(data: CommandRequest):
         return tare_scale(TareRequest())
     if data.command in ["light_on", "light_off"]:
         active = get_active_session()
-        res = control_device(data.command)
-        if active and active.get("status") in ("DRYING", "COOLING"):
-            from app.device_controller import _latest_actuator_targets
-            _latest_actuator_targets["heater"] = True
-        return res
-    if data.command in ["heater_on", "heater_off", "fan_on", "fan_off"]:
+        return control_device(data.command)
+    if data.command == "heater_on":
+        raise HTTPException(status_code=409, detail="Heater is controlled by the fixed 60C thermostat; start a drying session")
+    if data.command in ["heater_off", "fan_on", "fan_off"]:
         return control_device(data.command)
     active = get_active_session()
     if not active:

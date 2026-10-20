@@ -2,7 +2,10 @@ from datetime import datetime
 from enum import Enum
 from typing import Literal
 
+import math
+
 from pydantic import BaseModel, Field, field_validator
+from app.settings import DRYING_TEMPERATURE_C
 
 
 class CommandRequest(BaseModel):
@@ -42,12 +45,27 @@ class ControlProfileRequest(BaseModel):
     """A batch control profile produced by the parameter/prediction module."""
 
     batch_id: str = Field(min_length=1, max_length=128)
-    target_temperature_c: float = Field(gt=0, le=150)
+    target_temperature_c: float = Field(gt=0, le=DRYING_TEMPERATURE_C)
     target_humidity_percent: float = Field(ge=0, le=100)
     predicted_duration_minutes: int | None = Field(default=None, gt=0, le=14_400)
     profile_version: str = Field(default="unversioned", min_length=1, max_length=128)
     source: Literal["prediction_module", "operator_override"] = "prediction_module"
     cooling_duration_seconds: int = Field(default=300, ge=0, le=3_600)
+
+    @field_validator("target_temperature_c", mode="before")
+    @classmethod
+    def fixed_drying_temperature(cls, value):
+        # Preserve validation of bad inputs; normalize valid recommendations
+        # (including old 100-150C predictions) to the actual 60C setpoint.
+        if isinstance(value, bool):
+            raise ValueError("Temperature must be a positive finite number")
+        try:
+            requested = float(value)
+        except (TypeError, ValueError, OverflowError):
+            raise ValueError("Temperature must be a positive finite number")
+        if not math.isfinite(requested) or requested <= 0:
+            raise ValueError("Temperature must be a positive finite number")
+        return DRYING_TEMPERATURE_C
 
     @field_validator("batch_id", "profile_version")
     @classmethod
